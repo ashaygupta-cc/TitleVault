@@ -151,6 +151,15 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: This phase completes advanced GIS analytics and spatial enforcement for comprehensive geographic intelligence.
 
+### Phase 14: Court Bundles, Evidence Packaging & Judicial Verification
+- Subject-level court evidence bundle APIs
+- Canonical JSON, affidavits & PDF aggregation
+- Integrated Merkle proofs and GIS appendices
+- Court-safe verification endpoints
+- Judge-verifiable, registry-independent evidence outputs
+
+**Status**: This phase establishes comprehensive court evidence packaging with judicial verification capabilities.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry

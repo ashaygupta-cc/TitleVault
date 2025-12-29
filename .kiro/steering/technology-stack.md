@@ -43,6 +43,11 @@
 - **docxtpl**: Legal document template processing
 - **jinja2**: Advanced template rendering for agreements
 
+### Court Evidence & Legal Documentation
+- **zipfile**: Evidence bundle packaging and compression
+- **cryptography**: Digital signatures for court evidence
+- **pdfkit**: Advanced PDF generation for legal documents
+
 ### Geospatial & Geometry Processing
 - **shapely**: Geometric operations and spatial analysis
 - **geojson**: GeoJSON format handling

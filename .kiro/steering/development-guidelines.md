@@ -99,6 +99,13 @@
 - Comprehensive heatmap analytics for ownership, subdivision, and agreements
 - Court-auditable GIS outputs with legal-grade spatial documentation
 
+### Court Evidence & Judicial Verification
+- Comprehensive court evidence bundle generation for legal proceedings
+- Integrated canonical JSON, affidavits, and PDF aggregation systems
+- Merkle proof integration with GIS appendices for complete evidence packages
+- Judge-verifiable evidence outputs independent of registry system access
+- Court-safe verification endpoints with judicial authentication support
+
 ### Public Discovery & Transparency
 - Comprehensive public registry explorer with unified subject inspection
 - Transparent agreement visibility with advanced filtering capabilities
