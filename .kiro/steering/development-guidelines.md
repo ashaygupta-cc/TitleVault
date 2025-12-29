@@ -78,6 +78,13 @@
 - Legal hierarchy enforcement for vertical property structures
 - Conditional document generation based on agreement status
 
+### Public Discovery & Transparency
+- Comprehensive public registry explorer with unified subject inspection
+- Transparent agreement visibility with advanced filtering capabilities
+- Open access discovery without privileged authentication requirements
+- Unified inspection interface for all property hierarchy levels
+- Public transparency while maintaining privacy and security boundaries
+
 ## Testing Strategy
 - Unit tests for individual components
 - Integration tests for API endpoints

@@ -49,6 +49,11 @@
 - **networkx**: Graph-based property hierarchy analysis
 - **sqlalchemy-utils**: Advanced database utilities for hierarchical data
 
+### Public API & Discovery
+- **flask-cors**: Cross-origin resource sharing for public APIs
+- **flask-limiter**: Rate limiting for public endpoints
+- **elasticsearch**: Advanced search and discovery capabilities (future)
+
 ## Frontend Technologies (Future Phases)
 - **React**: UI framework
 - **TypeScript**: Type-safe JavaScript

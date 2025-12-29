@@ -125,6 +125,14 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: This phase completes vertical property ownership resolution with hierarchical legal enforcement.
 
+### Phase 11: Explorer, Discovery & Transparency Layer
+- Public registry explorer endpoints
+- Unified subject inspection (land / building / flat)
+- Agreement visibility with filters
+- Transparency without privileged access
+
+**Status**: This phase establishes complete public transparency and discovery capabilities for all registry entities.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry
