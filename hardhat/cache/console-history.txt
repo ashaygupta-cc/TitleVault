@@ -1,0 +1,117 @@
+  "0x11d1f1a8ab7ba621804059568621a7886077f367");
+  REGISTRAR_ROLE,
+await contract.hasRole(
+const REGISTRAR_ROLE = await contract.REGISTRAR_ROLE();
+  "0x11d1f1a8ab7ba621804059568621a7886077f367");
+await contract.grantRegistrar(
+  "0x80F3110106EBA36db203E1B807733a8794E06575",deployer);
+  "contracts/RegistryResolver.sol:RegistryResolver",
+const contract = await ethers.getContractAt(
+const [deployer] = await ethers.getSigners();
+)
+  "0x11d1f1a8ab7ba621804059568621a7886077f367"
+  await contract.REGISTRAR_ROLE(),
+await contract.hasRole(
+  await contract.REGISTRAR_ROLE(),BACKEND_SIGNER_ADDRESS);
+await contract.hasRole(
+  await contract.REGISTRARBACKEND_SIGNER_ADDRESS};
+await contract.hasRole(
+  await contract.REGISTRAR  BACKEND_SIGNER_ADDRESS
+await contract.hasRole(
+);
+  await contract.REGISTRAR  BACKEND_SIGNER_ADDRESS
+await contract.hasRole(
+await tx.wait();
+const tx = await contract.grantRegistrar(BACKEND_SIGNER_ADDRESS);
+  "0xdD2FD4581271e230360230F9337D5c0430Bf44C0";
+const BACKEND_SIGNER_ADDRESS =
+await ethers.provider.getCode("0x5FbDB2315678afecb367f032d93F642f64180aa3")
+await ethers.provider.getCode("0xYOUR_CONTRACT_ADDRESS")
+  "0x5FbDB2315678afecb367f032d93F642f64180aa3",admin);
+  "contracts/RegistryResolver.sol:RegistryResolver",
+const contract = await ethers.getContractAt(
+);
+  admin
+  "contracts/RegistryR  "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+const contract = await ethers.getContractAt(
+// 2. Attach to deployed contract (USE REAL ADDRESS)
+const [admin] = await ethers.getSigners();
+// 1. Get admin signer (Account #0)
+await ethers.provider.getCode("0xYOUR_CONTRACT_ADDRESS")
+await contract.grantRegistrar(BACKEND_SIGNER_ADDRESS);
+await contract.hasRole(await contract.getRoleAdmin(await contract.DEFAULT_ADMIN_ROLE()),admin.address);
+);
+  await contract.getRoleAd  admin.address
+await contract.hasRole(
+address
+  await contract.getRoleAd  admin.
+await contract.hasRole(
+);
+  await contract.getRoleAd  admin.address
+await contract.hasRole(
+await tx.wait();
+);
+  "0xdD2FD4581271e230360230F9337D5c0430Bf44C0"
+const tx = await contract.grantRegistrar(
+);
+  admin
+  "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "contracts/RegistryResolver.sol:RegistryResolver",
+const contract = await ethers.getContractAt(
+const [admin] = await ethers.getSigners();
+await tx.wait();
+);
+  "0xdD2FD4581271e230360230F9337D5c0430Bf44C0"
+  REGISTRAR_ROLE,
+const tx = await contract.grantRole(
+REGISTRAR_ROLE
+REGUSTRARR_ROLE
+REGISTRAR_ROLE
+const REGISTRAR_ROLE = await contract.REGISTRAR_RO
+);
+  admin
+  "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "contracts/RegistryResolver.sol:RegistryResolver",
+const contract = await ethers.getContractAt(
+);
+  admin
+  "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+const   "contracts/RegistryResolver.sol:RegistryResolver",
+const [admin] = await ethers.getSigners();
+);
+  REGISTRAR_ROLE,  "0xdD2FD4581271e230360230F9337D5c0430Bf44C0"
+await contract.grantRole(
+const REGISTRAR_ROLE = await contract.REGISTRAR_ROLE();
+admin.address
+const [admin] = await ethers.getSigners();
+admin.a
+const [admin] = await ethers.getSigners();
+admin.address
+admin.a
+const [admin] = await ethers.getSigners();
+contract.interface.fragments.map(f => f.name)
+const REGISTRAR_ROLE = await contract.REGISTRAR_ROREGISTRAR_ROLE
+)
+  await contract.DEFAULT_A  (await ethers.getSigners())[0].address
+await contract.hasRole(
+contract.target
+);
+  "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+  "contracts/RegistryResolver.sol:RegistryResolver",
+const contract = await ethers.getContractAt(
+);
+  "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+  "contracts/RegistryResolver.sol:RegistryResolver",
+const contract = await ethers.getContractAt(
+);
+  "0xdD2FD4581271e230360230F9337D5c0430Bf44C0"
+  REGISTRAR_ROLE,
+await contract.grantRole(
+// Backend signer address
+const REGISTRAR_ROLE = await contract.REGISTRAR
+// Role hash (must match contract)
+);
+  "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+  "RegistryResolver",
+const contract = await ethers.getContractAt(
+await ethers.provider.getCode("0x5fbdb2315678afecb367f032d93f642f64180aa3")

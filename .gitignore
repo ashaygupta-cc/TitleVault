@@ -1,0 +1,51 @@
+# ======================
+# Node / Bun
+# ======================
+node_modules/
+out/
+dist/
+*.tgz
+
+# ======================
+# Coverage
+# ======================
+coverage/
+*.lcov
+
+# ======================
+# Logs
+# ======================
+logs/
+*.log
+report.*.json
+
+# ======================
+# Environment variables
+# ======================
+.env
+.env.*
+!.env.example
+
+# ======================
+# Caches
+# ======================
+.eslintcache
+.cache/
+*.tsbuildinfo
+
+# ======================
+# Python
+# ======================
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+backend/venv/
+
+# ======================
+# IDE / OS
+# ======================
+.idea/
+.DS_Store
