@@ -31,6 +31,11 @@
 - **merkletools**: Merkle tree construction and proof generation
 - **hashlib**: Cryptographic hashing functions
 
+### Fraud Detection & Verification
+- **scikit-learn**: Machine learning for fraud detection
+- **numpy**: Numerical computing for anomaly detection
+- **pandas**: Data analysis for verification patterns
+
 ### Document Generation
 - **reportlab**: PDF generation for affidavits
 - **qrcode**: QR code generation for verification
@@ -44,6 +49,9 @@
 - **pyproj**: Coordinate system transformations
 - **geopandas**: Advanced geospatial data analysis
 - **rtree**: Spatial indexing for efficient queries
+- **rasterio**: Raster data processing for heatmaps
+- **folium**: Interactive map generation and visualization
+- **matplotlib**: Statistical plotting and heatmap generation
 
 ### Property Management & Hierarchy
 - **networkx**: Graph-based property hierarchy analysis

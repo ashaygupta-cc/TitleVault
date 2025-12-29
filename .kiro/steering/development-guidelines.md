@@ -85,6 +85,20 @@
 - Agreement visibility with transparent filtering and analytics
 - Real-time registry statistics and public transparency features
 
+### Verification & Fraud Detection
+- Court-safe verification endpoints with comprehensive audit trails
+- Canonical hash and Merkle inclusion verification systems
+- Advanced fraud detection primitives and anomaly identification
+- Explicit failure reasons for comprehensive audit defense
+- Legacy system cleanup and schema modernization
+
+### GIS Analytics & Spatial Enforcement
+- Advanced GIS appendix generation and parcel audit capabilities
+- Spatial conservation enforcement with area consistency monitoring
+- Drift detection algorithms for geometric accuracy validation
+- Comprehensive heatmap analytics for ownership, subdivision, and agreements
+- Court-auditable GIS outputs with legal-grade spatial documentation
+
 ### Public Discovery & Transparency
 - Comprehensive public registry explorer with unified subject inspection
 - Transparent agreement visibility with advanced filtering capabilities

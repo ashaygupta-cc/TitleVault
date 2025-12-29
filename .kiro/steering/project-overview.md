@@ -133,6 +133,24 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: This phase establishes complete public transparency and discovery capabilities for all registry entities.
 
+### Phase 12: Verification, Fraud Detection & Audit Defense Layer
+- Court-safe verification endpoints
+- Canonical hash & Merkle inclusion verification
+- Fraud detection primitives
+- Explicit failure reasons for audits
+- Removal of legacy Merkle routes & schemas
+
+**Status**: This phase establishes comprehensive fraud detection and court-safe verification capabilities.
+
+### Phase 13: GIS, Spatial Enforcement & Heatmap Analytics Layer
+- GIS appendix & parcel audit endpoints
+- Spatial conservation enforcement
+- Area consistency & drift detection
+- Ownership, subdivision & agreement heatmaps
+- Court-auditable GIS outputs
+
+**Status**: This phase completes advanced GIS analytics and spatial enforcement for comprehensive geographic intelligence.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry
