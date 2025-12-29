@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from shapely.geometry import Polygon as ShapelyPolygon
 import json
 from sqlalchemy import text
+from deps.auth import require_admin
 
 from models import PropertyRecord, get_db
 from schemas.registry_schema import (
@@ -63,11 +64,13 @@ def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
     )
 
     new_record = PropertyRecord(
-        cid=cid,
-        record_hash=record_hash_bytes,
-        owner_address=req.owner_address,
-        canonical_json=canonical_bytes.decode("utf-8"),
-        geom=f"SRID=4326;{geom_wkt}",
+    cid=cid,
+    record_hash=record_hash_bytes,
+    canonical_hash=record_hash_bytes,
+    format="CANONICAL",
+    owner_address=req.owner_address,
+    canonical_json=canonical_bytes.decode("utf-8"),
+    geom=f"SRID=4326;{geom_wkt}",
     )
 
     db.add(new_record)
@@ -127,14 +130,17 @@ def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
     )
 
     new_record = PropertyRecord(
-        cid=cid,
-        record_hash=new_hash_bytes,
-        owner_address=req.new_owner_address,
-        canonical_json=canonical_bytes.decode("utf-8"),
-        geom=old_record.geom,
-        area_m2=old_record.area_m2,
-        parent_record=old_record.record_hash,
+    cid=cid,
+    record_hash=new_hash_bytes,
+    canonical_hash=new_hash_bytes,    
+    format="CANONICAL",               
+    owner_address=req.new_owner_address,
+    canonical_json=canonical_bytes.decode("utf-8"),
+    geom=old_record.geom,
+    area_m2=old_record.area_m2,
+    parent_record=old_record.record_hash,
     )
+
 
     db.add(new_record)
     db.commit()
@@ -188,7 +194,10 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
             "ipfs_exists": False,
             "blockchain_exists": False,
         }
-
+    
+    print("🔎 canonical_hash:", db_record.canonical_hash.hex())
+    print("🔎 record_hash   :", db_record.record_hash.hex())
+    print("🔎 format        :", db_record.format)
     # 2️⃣ IPFS FETCH (existence proof)
     try:
         raw_ipfs = fetch_raw_from_ipfs(db_record.cid)
@@ -204,13 +213,17 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
     blockchain_exists = timestamp != 0
     owner_match = owner.lower() == db_record.owner_address.lower()
     cid_match = cid == db_record.cid
+    
+    parent_match = (
+    (db_record.parent_record is None and parent_hash == b"\x00" * 32)
+    or (
+        db_record.parent_record is not None
+        and parent_hash == db_record.parent_record
+       )
+    )
 
     # 4️⃣ LEGACY DETECTION (UNCHANGED)
-    is_legacy = (
-        db_record.canonical_json is None
-        or db_record.canonical_json == ""
-        or db_record.canonical_json == "{}"
-    )
+    is_legacy = db_record.format != "CANONICAL"
 
     # 5️⃣ HASH VERIFICATION (FIXED SOURCE)
     if is_legacy:
@@ -218,7 +231,7 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
     else:
         canonical_bytes = db_record.canonical_json.encode("utf-8")
         computed_hash = compute_keccak256_from_bytes(canonical_bytes)
-        db_hash_hex = "0x" + db_record.record_hash.hex()
+        db_hash_hex = "0x" + db_record.canonical_hash.hex()
         hash_match = (computed_hash == db_hash_hex)
 
     # 6️⃣ FINAL STATUS (UNCHANGED SEMANTICS)
@@ -232,6 +245,9 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
         status = "TAMPERED"
 
     elif not cid_match:
+        status = "TAMPERED"
+
+    elif not parent_match:
         status = "TAMPERED"
 
     elif is_legacy:
@@ -251,6 +267,7 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
         "db_exists": True,
         "ipfs_exists": ipfs_exists,
         "blockchain_exists": blockchain_exists,
+        "parent_match": parent_match,
         "hash_match": hash_match,
         "cid_match": cid_match,
         "owner_match": owner_match,

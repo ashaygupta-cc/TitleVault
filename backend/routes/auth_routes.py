@@ -1,59 +1,50 @@
-# backend/routes/auth_routes.py
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-import jwt  # PyJWT
+from jose import jwt, JWTError
 
-from models import User, get_db
+from models import User, RefreshToken, get_db
 from schemas.auth_schema import RegisterRequest, LoginRequest, TokenResponse
 from config import settings
+from deps.auth import require_admin   # IMPORTANT
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-# ---------------------------------------
-# Helper: JWT creation
-# ---------------------------------------
-def create_access_token(payload: dict, expires_minutes: int = 60):
-    to_encode = payload.copy()
-    to_encode["exp"] = datetime.utcnow() + timedelta(minutes=expires_minutes)
-
-    return jwt.encode(
-        to_encode,
-        settings.SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
-    )
+def create_token(payload: dict, expires_minutes: int):
+    payload = payload.copy()
+    payload["exp"] = datetime.utcnow() + timedelta(minutes=expires_minutes)
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-# ---------------------------------------
-# POST /auth/register
-# ---------------------------------------
+# --------------------------------------------------
+# ADMIN ONLY: CREATE USER
+# --------------------------------------------------
 @router.post("/register")
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.username == req.username).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="User already exists")
-
-    hashed_password = pwd_context.hash(req.password)
+def register(
+    req: RegisterRequest,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
+    if db.query(User).filter(User.username == req.username).first():
+        raise HTTPException(status_code=400, detail="User exists")
 
     user = User(
         username=req.username,
-        password_hash=hashed_password,
-        roles=["user"],  # future-ready
+        password_hash=pwd_context.hash(req.password),
+        roles=["user"],
     )
 
     db.add(user)
     db.commit()
+    return {"message": "User created"}
 
-    return {"message": "User registered successfully"}
 
-
-# ---------------------------------------
-# POST /auth/login
-# ---------------------------------------
+# --------------------------------------------------
+# LOGIN
+# --------------------------------------------------
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == req.username).first()
@@ -61,11 +52,73 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user or not pwd_context.verify(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token(
+    access_token = create_token(
         {
-            "sub": user.username,
+            "sub": str(user.id),
+            "username": user.username,
             "roles": user.roles,
-        }
+            "type": "access",
+        },
+        expires_minutes=60,
     )
 
-    return TokenResponse(access_token=token)
+    refresh_token = create_token(
+        {
+            "sub": str(user.id),
+            "type": "refresh",
+        },
+        expires_minutes=60 * 24 * 7,
+    )
+
+    db.add(
+        RefreshToken(
+            user_id=user.id,
+            token=refresh_token,
+            expires_at=datetime.utcnow() + timedelta(days=7),
+        )
+    )
+    db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
+
+
+# --------------------------------------------------
+# REFRESH
+# --------------------------------------------------
+@router.post("/refresh")
+def refresh(token: str, db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Wrong token type")
+
+    db_token = db.query(RefreshToken).filter(
+        RefreshToken.token == token,
+        RefreshToken.expires_at > datetime.utcnow(),
+    ).first()
+
+    if not db_token:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+
+    user = db.query(User).get(payload["sub"])
+
+    access_token = create_token(
+        {
+            "sub": str(user.id),
+            "username": user.username,
+            "roles": user.roles,
+            "type": "access",
+        },
+        expires_minutes=60,
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}

@@ -68,14 +68,14 @@ def handle_record_created(event, db: Session):
     # -----------------------------
     db.add(PropertyRecord(
         record_hash=record_hash,
+        canonical_hash=record_hash,     
+        format="CANONICAL",              
         owner_address=owner,
         cid=cid,
         canonical_json=raw,
         geom=f"SRID=4326;{geom_wkt}",
         area_m2=area_m2,
-        created_at=datetime.fromtimestamp(
-            int(timestamp), tz=timezone.utc
-        ),
+        created_at=datetime.fromtimestamp(timestamp, tz=timezone.utc),
     ))
 
     db.commit()
@@ -112,15 +112,15 @@ def handle_record_transferred(event, db: Session):
     # -----------------------------
     db.add(PropertyRecord(
         record_hash=new_hash,
+        canonical_hash=new_hash,        
+        format="CANONICAL",             
         owner_address=new_owner,
         cid=old.cid,
         canonical_json=old.canonical_json,
         geom=old.geom,
         area_m2=old.area_m2,
         parent_record=old_hash,
-        created_at=datetime.fromtimestamp(
-            int(timestamp), tz=timezone.utc
-        ),
+        created_at=datetime.fromtimestamp(timestamp, tz=timezone.utc),
     ))
 
     db.commit()
