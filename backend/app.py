@@ -6,12 +6,9 @@ from routes.registry_routes import router as registry_router
 from routes.health_routes import router as health_router
 
 from models import Base, engine
-
-
-# ------------------------------------
-# Create tables if missing (optional)
-# ------------------------------------
-# Base.metadata.create_all(bind=engine)
+from indexer.registry_indexer import sync_from_chain   
+import asyncio
+from indexer.live_registry_listener import listen_registry_events
 
 
 app = FastAPI(
@@ -19,25 +16,27 @@ app = FastAPI(
     version="1.0.0",
 )
 
-
-# ------------------------------------
-# CORS (Allow frontend)
-# ------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],       # change later in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# ------------------------------------
-# ROUTES
-# ------------------------------------
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(registry_router, prefix="/registry", tags=["Registry"])
 app.include_router(health_router, prefix="/health", tags=["System"])
+
+
+@app.on_event("startup")
+async def startup():
+    print("🔄 Syncing database from blockchain events...")
+    sync_from_chain()
+    print("✅ Blockchain → DB sync complete")
+
+    print("📡 Starting live registry listener...")
+    asyncio.create_task(listen_registry_events())
 
 
 @app.get("/")

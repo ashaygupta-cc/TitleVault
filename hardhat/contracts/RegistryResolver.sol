@@ -12,7 +12,7 @@ contract RegistryResolver is AccessControl {
         uint256 timestamp;
         address registrar;
         bytes registrarSig;
-        bytes32 parentRecordHash; // 🔗 history linkage
+        bytes32 parentRecordHash; 
     }
 
     mapping(bytes32 => Record) private _records;

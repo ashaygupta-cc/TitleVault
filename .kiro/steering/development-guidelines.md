@@ -35,6 +35,14 @@
 - Use Web3.py for Ethereum interactions
 - Implement proper gas estimation and transaction handling
 - Maintain consistency between on-chain and off-chain data
+- Event-driven synchronization with blockchain state
+- Deterministic database recovery from blockchain logs
+
+### Data Recovery & Synchronization
+- Blockchain as single source of truth
+- Idempotent event replay for database reconstruction
+- WebSocket-based real-time event monitoring
+- Restart-safe synchronization mechanisms
 
 ## Testing Strategy
 - Unit tests for individual components

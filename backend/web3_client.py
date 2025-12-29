@@ -4,6 +4,8 @@ from web3 import Web3
 from eth_account import Account
 from fastapi import HTTPException
 from config import settings
+from utils.bytes32 import to_bytes32
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -59,7 +61,7 @@ def send_create_record_tx(
     print("📦 CID:", cid)
     print("👤 Owner:", owner_addr)
 
-    record_hash_bytes = bytes.fromhex(record_hash_hex.replace("0x", ""))
+    record_hash_bytes = to_bytes32(record_hash_hex)
 
     nonce = w3.eth.get_transaction_count(REGISTRAR_ADDRESS)
 
@@ -104,6 +106,7 @@ def send_create_record_tx(
 def send_transfer_record_tx(
     old_record_hash_hex: str,
     new_record_hash_hex: str,
+    cid: str,
     new_owner: str,
     registrar_sig: bytes = b"",
 ):
@@ -125,8 +128,9 @@ def send_transfer_record_tx(
     print("🆕 New hash:", new_record_hash_hex)
     print("👤 New owner:", new_owner)
 
-    old_hash_bytes = bytes.fromhex(old_record_hash_hex.replace("0x", ""))
-    new_hash_bytes = bytes.fromhex(new_record_hash_hex.replace("0x", ""))
+    old_hash_bytes = to_bytes32(old_record_hash_hex)
+    new_hash_bytes = to_bytes32(new_record_hash_hex)
+
 
     nonce = w3.eth.get_transaction_count(REGISTRAR_ADDRESS)
 
@@ -146,6 +150,7 @@ def send_transfer_record_tx(
     tx = contract.functions.transferRecord(
         old_hash_bytes,
         new_hash_bytes,
+        cid,
         new_owner,
         registrar_sig,
     ).build_transaction({
@@ -180,7 +185,7 @@ def get_record_from_chain(record_hash_hex: str):
     print("🔍 Querying hash:", record_hash_hex)
     print("📜 Contract:", contract.address)
 
-    record_hash_bytes = bytes.fromhex(record_hash_hex.replace("0x", ""))
+    record_hash_bytes = to_bytes32(record_hash_hex)
 
     result = contract.functions.getRecord(record_hash_bytes).call()
 

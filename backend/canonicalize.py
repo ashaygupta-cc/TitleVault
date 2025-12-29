@@ -5,12 +5,13 @@ import unicodedata
 from web3 import Web3
 
 
-def canonicalize_json(data: dict) -> str:
+def canonicalize_to_bytes(data: dict) -> bytes:
     """
-    Deterministic canonical JSON:
+    Deterministic canonical JSON → UTF-8 bytes
     - Unicode NFC normalization
     - Sorted keys
     - No whitespace
+    - Stable byte output
     """
 
     def normalize(obj):
@@ -29,11 +30,8 @@ def canonicalize_json(data: dict) -> str:
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
-    )
+    ).encode("utf-8")
 
 
-def compute_keccak256(canonical_json: str) -> str:
-    """
-    Ethereum-compatible keccak256 hash
-    """
-    return Web3.keccak(text=canonical_json).hex()
+def compute_keccak256_from_bytes(data: bytes) -> str:
+    return "0x" + Web3.keccak(data).hex()

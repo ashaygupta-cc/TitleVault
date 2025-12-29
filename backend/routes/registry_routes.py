@@ -11,13 +11,18 @@ from schemas.registry_schema import (
     TransferRecordRequest,
 )
 
-from canonicalize import canonicalize_json, compute_keccak256
-from ipfs_client import upload_json_to_ipfs, fetch_raw_from_ipfs
+from canonicalize import (
+    canonicalize_to_bytes,
+    compute_keccak256_from_bytes,
+)
+from ipfs_client import upload_bytes_to_ipfs, fetch_raw_from_ipfs
 from web3_client import (
     send_create_record_tx,
     send_transfer_record_tx,
     get_record_from_chain,
 )
+from utils.bytes32 import to_bytes32
+
 
 router = APIRouter(tags=["registry"])
 
@@ -42,15 +47,13 @@ def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
         "polygon": coords,
     }
 
-    canonical_json = canonicalize_json(record_json)
-    print("📜 Canonical JSON:", canonical_json)
+    # 🔑 SINGLE SOURCE OF TRUTH
+    canonical_bytes = canonicalize_to_bytes(record_json)
 
-    record_hash_hex = compute_keccak256(canonical_json)
-    record_hash_bytes = bytes.fromhex(record_hash_hex[2:])
-    print("🔑 Record Hash:", record_hash_hex)
+    record_hash_hex = compute_keccak256_from_bytes(canonical_bytes)
+    record_hash_bytes = to_bytes32(record_hash_hex)
 
-    cid = upload_json_to_ipfs(canonical_json)
-    print("📦 IPFS CID:", cid)
+    cid = upload_bytes_to_ipfs(canonical_bytes)
 
     tx_hash = send_create_record_tx(
         record_hash_hex=record_hash_hex,
@@ -58,13 +61,12 @@ def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
         owner_addr=req.owner_address,
         registrar_sig=b"",
     )
-    print("⛓️ Blockchain TX:", tx_hash)
 
     new_record = PropertyRecord(
         cid=cid,
         record_hash=record_hash_bytes,
         owner_address=req.owner_address,
-        canonical_json=canonical_json,
+        canonical_json=canonical_bytes.decode("utf-8"),
         geom=f"SRID=4326;{geom_wkt}",
     )
 
@@ -80,9 +82,6 @@ def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
     new_record.area_m2 = area_m2
     db.commit()
 
-    print("📐 Area (m²):", area_m2)
-    print("================ CREATE DONE =================\n")
-
     return {
         "id": str(new_record.id),
         "cid": cid,
@@ -97,21 +96,14 @@ def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
 @router.post("/transfer")
 def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
 
-    print("\n================ TRANSFER RECORD =================")
-
-    clean = req.old_record_hash[2:] if req.old_record_hash.startswith("0x") else req.old_record_hash
     old_record = db.query(PropertyRecord).filter(
-        PropertyRecord.record_hash == bytes.fromhex(clean)
+        PropertyRecord.record_hash == to_bytes32(req.old_record_hash)
     ).first()
 
     if not old_record:
         raise HTTPException(status_code=404, detail="Original record not found")
 
-    old_data = (
-        old_record.canonical_json
-        if isinstance(old_record.canonical_json, dict)
-        else json.loads(old_record.canonical_json)
-    )
+    old_data = json.loads(old_record.canonical_json)
 
     record_json = {
         "owner": req.new_owner_address,
@@ -119,15 +111,17 @@ def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
         "polygon": old_data["polygon"],
     }
 
-    canonical_json = canonicalize_json(record_json)
-    new_hash_hex = compute_keccak256(canonical_json)
-    new_hash_bytes = bytes.fromhex(new_hash_hex[2:])
+    canonical_bytes = canonicalize_to_bytes(record_json)
 
-    cid = upload_json_to_ipfs(canonical_json)
+    new_hash_hex = compute_keccak256_from_bytes(canonical_bytes)
+    new_hash_bytes = to_bytes32(new_hash_hex)
+
+    cid = upload_bytes_to_ipfs(canonical_bytes)
 
     tx_hash = send_transfer_record_tx(
         old_record_hash_hex="0x" + old_record.record_hash.hex(),
         new_record_hash_hex=new_hash_hex,
+        cid=cid,
         new_owner=req.new_owner_address,
         registrar_sig=b"",
     )
@@ -136,7 +130,7 @@ def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
         cid=cid,
         record_hash=new_hash_bytes,
         owner_address=req.new_owner_address,
-        canonical_json=canonical_json,
+        canonical_json=canonical_bytes.decode("utf-8"),
         geom=old_record.geom,
         area_m2=old_record.area_m2,
         parent_record=old_record.record_hash,
@@ -145,8 +139,6 @@ def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
     db.add(new_record)
     db.commit()
     db.refresh(new_record)
-
-    print("================ TRANSFER DONE =================\n")
 
     return {
         "old_record_hash": "0x" + old_record.record_hash.hex(),
@@ -181,8 +173,9 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
     print("\n================ VERIFY RECORD =================")
 
     clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
-    record_hash_bytes = bytes.fromhex(clean)
+    record_hash_bytes = to_bytes32(record_hash)
 
+    # 1️⃣ DB LOOKUP
     db_record = db.query(PropertyRecord).filter(
         PropertyRecord.record_hash == record_hash_bytes
     ).first()
@@ -196,31 +189,57 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
             "blockchain_exists": False,
         }
 
-    fetch_raw_from_ipfs(db_record.cid)
-    ipfs_exists = True
+    # 2️⃣ IPFS FETCH (existence proof)
+    try:
+        raw_ipfs = fetch_raw_from_ipfs(db_record.cid)
+        ipfs_exists = True
+    except Exception:
+        raw_ipfs = None
+        ipfs_exists = False
 
-    canonical_json_str = (
-        canonicalize_json(db_record.canonical_json)
-        if isinstance(db_record.canonical_json, dict)
-        else db_record.canonical_json
+    # 3️⃣ READ FROM BLOCKCHAIN
+    owner, cid, timestamp, registrar, registrar_sig, parent_hash = \
+        get_record_from_chain(record_hash)
+
+    blockchain_exists = timestamp != 0
+    owner_match = owner.lower() == db_record.owner_address.lower()
+    cid_match = cid == db_record.cid
+
+    # 4️⃣ LEGACY DETECTION (UNCHANGED)
+    is_legacy = (
+        db_record.canonical_json is None
+        or db_record.canonical_json == ""
+        or db_record.canonical_json == "{}"
     )
 
-    computed_hash = compute_keccak256(canonical_json_str)
-    db_hash_hex = "0x" + db_record.record_hash.hex()
-    hash_match = db_hash_hex == computed_hash
+    # 5️⃣ HASH VERIFICATION (FIXED SOURCE)
+    if is_legacy:
+        hash_match = None
+    else:
+        canonical_bytes = db_record.canonical_json.encode("utf-8")
+        computed_hash = compute_keccak256_from_bytes(canonical_bytes)
+        db_hash_hex = "0x" + db_record.record_hash.hex()
+        hash_match = (computed_hash == db_hash_hex)
 
-    owner, cid, timestamp, registrar, registrar_sig, parent_hash = \
-    get_record_from_chain("0x" + clean)
-    blockchain_exists = timestamp != 0
-    cid_match = cid == db_record.cid
-    owner_match = owner.lower() == db_record.owner_address.lower()
-
+    # 6️⃣ FINAL STATUS (UNCHANGED SEMANTICS)
     if not blockchain_exists:
         status = "NOT_ON_CHAIN"
-    elif cid_match and owner_match and hash_match:
+
+    elif not ipfs_exists:
+        status = "INVALID_IPFS"
+
+    elif not owner_match:
+        status = "TAMPERED"
+
+    elif not cid_match:
+        status = "TAMPERED"
+
+    elif is_legacy:
+        status = "LEGACY"
+
+    elif hash_match:
         status = "VERIFIED"
-    elif cid_match and owner_match and not hash_match:
-        status = "LEGACY_FORMAT"
+
     else:
         status = "TAMPERED"
 
@@ -235,7 +254,9 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
         "hash_match": hash_match,
         "cid_match": cid_match,
         "owner_match": owner_match,
+        "is_legacy": is_legacy,
     }
+
 
 # ======================================================
 # GET /registry/history/{record_hash}

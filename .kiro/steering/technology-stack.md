@@ -17,6 +17,8 @@
 - **Web3.py**: Ethereum blockchain interaction
 - **eth-account**: Ethereum account management
 - **eth-utils**: Ethereum utility functions
+- **websockets**: WebSocket client for real-time blockchain events
+- **asyncio**: Asynchronous event handling
 
 ### IPFS Integration
 - **ipfshttpclient**: IPFS HTTP API client

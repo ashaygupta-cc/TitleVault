@@ -30,7 +30,22 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 - `/registry/verify/{record_hash}` endpoint
 - On-chain ↔ DB ↔ IPFS consistency checks
 
-**Status**: This commit establishes the complete blockchain-backed registry foundation.
+**Status**: Complete blockchain-backed registry foundation established.
+
+### Phase 4A–4B: Blockchain-First Recovery & Live Synchronization
+
+#### Phase 4A — Cold Database Recovery from Blockchain
+- Deterministic DB rebuild from on-chain logs
+- IPFS-backed canonical reconstruction
+- Idempotent event replay
+- Chain as sole source of truth
+
+#### Phase 4B — Live WebSocket Synchronization
+- Event-driven updates (no polling)
+- Restart-safe synchronization
+- Immediate DB propagation from on-chain events
+
+**Status**: This phase guarantees recoverability, determinism, and real-time correctness.
 
 ## Architecture Components
 - **Smart Contracts**: Solidity contracts for on-chain registry

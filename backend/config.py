@@ -16,6 +16,7 @@ class Settings:
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     GOOGLE_MAPS_KEY = os.getenv("GOOGLE_MAPS_KEY")
     RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "600"))
-
+    DEPLOYMENT_BLOCK = int(os.getenv("DEPLOYMENT_BLOCK"))
+    ALCHEMY_WS = os.getenv("ALCHEMY_WS")
 
 settings = Settings()
