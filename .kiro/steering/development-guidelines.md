@@ -44,6 +44,12 @@
 - WebSocket-based real-time event monitoring
 - Restart-safe synchronization mechanisms
 
+### Cryptographic Verification
+- Deterministic Merkle tree construction for data integrity
+- On-chain anchoring for immutable snapshots
+- Inclusion proof generation for individual records
+- Court-grade affidavit generation with cryptographic backing
+
 ## Testing Strategy
 - Unit tests for individual components
 - Integration tests for API endpoints

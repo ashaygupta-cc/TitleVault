@@ -9,6 +9,7 @@ from models import Base, engine
 from indexer.registry_indexer import sync_from_chain   
 import asyncio
 from indexer.live_registry_listener import listen_registry_events
+from routes.merkle_routes import router as merkle_router
 
 
 app = FastAPI(
@@ -27,12 +28,12 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(registry_router, prefix="/registry", tags=["Registry"])
 app.include_router(health_router, prefix="/health", tags=["System"])
-
+app.include_router(merkle_router, prefix="/merkle", tags=["Merkle"])
 
 @app.on_event("startup")
 async def startup():
     print("🔄 Syncing database from blockchain events...")
-    sync_from_chain()
+    # sync_from_chain()
     print("✅ Blockchain → DB sync complete")
 
     print("📡 Starting live registry listener...")

@@ -28,6 +28,13 @@
 - **PyJWT**: JSON Web Token implementation
 - **bcrypt**: Password hashing
 - **cryptography**: Cryptographic operations
+- **merkletools**: Merkle tree construction and proof generation
+- **hashlib**: Cryptographic hashing functions
+
+### Document Generation
+- **reportlab**: PDF generation for affidavits
+- **qrcode**: QR code generation for verification
+- **Pillow**: Image processing for document rendering
 
 ## Frontend Technologies (Future Phases)
 - **React**: UI framework

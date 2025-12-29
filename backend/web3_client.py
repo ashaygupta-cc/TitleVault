@@ -9,12 +9,13 @@ from utils.bytes32 import to_bytes32
 
 BASE_DIR = Path(__file__).resolve().parent
 
+# RegistryResolver contract (EXISTING)
+
 ABI_PATH = BASE_DIR / "contracts" / "abi" / "RegistryResolver.json"
 ABI = json.loads(ABI_PATH.read_text())["abi"]
 
-print("🌐 WEB3 PROVIDER:", settings.WEB3_PROVIDER)
-
-w3 = Web3(Web3.HTTPProvider(settings.WEB3_PROVIDER))
+print("🌐 WEB3 PROVIDER:", settings.ALCHEMY_HTTP)
+w3 = Web3(Web3.HTTPProvider(settings.ALCHEMY_HTTP))
 
 print("🔌 Web3 connected:", w3.is_connected())
 print("🔗 Chain ID:", w3.eth.chain_id if w3.is_connected() else "N/A")
@@ -28,6 +29,27 @@ if settings.CONTRACT_ADDRESS:
     print("📜 Using CONTRACT ADDRESS:", contract.address)
 else:
     print("❌ CONTRACT_ADDRESS not set")
+
+
+
+
+# RegistryRootAnchor contract (NEW – minimal add)
+
+ROOT_ABI_PATH = BASE_DIR / "contracts" / "abi" / "RegistryRootAnchor.json"
+ROOT_ABI = json.loads(ROOT_ABI_PATH.read_text())["abi"]
+
+registry_root_contract = None
+if settings.REGISTRY_ROOT_CONTRACT:
+    registry_root_contract = w3.eth.contract(
+        address=Web3.to_checksum_address(settings.REGISTRY_ROOT_CONTRACT),
+        abi=ROOT_ABI
+    )
+    print("🌳 Using RegistryRootAnchor at:", registry_root_contract.address)
+else:
+    print("❌ REGISTRY_ROOT_CONTRACT not set")
+
+
+
 
 REGISTRAR_ACCOUNT = Account.from_key(settings.REGISTRAR_PRIVATE_KEY)
 REGISTRAR_ADDRESS = Web3.to_checksum_address(REGISTRAR_ACCOUNT.address)
@@ -93,7 +115,7 @@ def send_create_record_tx(
     })
 
     signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
 
     print("🚀 TX sent:", w3.to_hex(tx_hash))
     print("===================================================\n")
@@ -163,7 +185,7 @@ def send_transfer_record_tx(
     })
 
     signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
 
     print("🚀 TX sent:", w3.to_hex(tx_hash))
     print("===================================================\n")
@@ -193,3 +215,23 @@ def get_record_from_chain(record_hash_hex: str):
     print("==============================================\n")
 
     return result
+
+
+def get_registry_resolver_contract():
+    """
+    Returns the RegistryResolver contract.
+    Keeps backward compatibility with existing code.
+    """
+    if contract is None:
+        raise RuntimeError("RegistryResolver contract not initialized")
+    return contract
+
+
+def get_registry_root_contract():
+    """
+    Returns the RegistryRootAnchor contract.
+    REQUIRED for Merkle anchoring.
+    """
+    if registry_root_contract is None:
+        raise RuntimeError("RegistryRootAnchor contract not initialized")
+    return registry_root_contract

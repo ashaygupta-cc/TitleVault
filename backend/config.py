@@ -17,6 +17,9 @@ class Settings:
     GOOGLE_MAPS_KEY = os.getenv("GOOGLE_MAPS_KEY")
     RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "600"))
     DEPLOYMENT_BLOCK = int(os.getenv("DEPLOYMENT_BLOCK"))
-    ALCHEMY_WS = os.getenv("ALCHEMY_WS")
+    ALCHEMY_HTTP = os.getenv("ALCHEMY_HTTP")
+    REGISTRY_ROOT_CONTRACT = os.getenv("REGISTRY_ROOT_CONTRACT")
+    PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL","http://127.0.0.1:8000")
+    ETH_EXPLORER_BASE = os.getenv("ETH_EXPLORER_BASE")
 
 settings = Settings()

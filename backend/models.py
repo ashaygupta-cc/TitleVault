@@ -117,7 +117,7 @@ class PropertyRecord(Base):
 
     # Canonical JSON (sorted, stable)
     canonical_json = Column(JSONB, nullable=False)
-    
+
     # PostGIS polygon
     geom = Column(
         Geometry(geometry_type="POLYGON", srid=4326),
@@ -127,6 +127,31 @@ class PropertyRecord(Base):
     area_m2 = Column(Numeric, nullable=True)
 
     created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+# MERKLE SNAPSHOT MODEL
+class MerkleSnapshot(Base):
+    __tablename__ = "merkle_snapshots"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+
+    # Merkle root (bytes32)
+    root = Column(LargeBinary(32), nullable=False, index=True)
+
+    # On-chain anchoring tx hash
+    tx_hash = Column(String(66), nullable=False, unique=True)
+
+    # Block where root was anchored
+    block_number = Column(Numeric, nullable=False)
+
+    anchored_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,

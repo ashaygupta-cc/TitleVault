@@ -1,3 +1,4 @@
+from web3._utils.events import get_event_data
 from web3 import Web3
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -130,9 +131,8 @@ def handle_record_transferred(event, db: Session):
 # 🔄 FULL SYNC FROM CHAIN (PHASE 4C)
 # --------------------------------------------------
 START_BLOCK = settings.DEPLOYMENT_BLOCK
-STEP = 1
+STEP = 2000
 MAX_BLOCKS = 1300
-
 
 def sync_from_chain():
     print("🔄 Syncing Registry from blockchain...")
@@ -146,36 +146,46 @@ def sync_from_chain():
 
     print(f"🔍 Sync range: {START_BLOCK} → {latest}")
 
+    # Event ABIs
+    created_event_abi = contract.events.RecordCreated._get_event_abi()
+    transferred_event_abi = contract.events.RecordTransferred._get_event_abi()
+
+    created_topic = Web3.keccak(
+        text="RecordCreated(bytes32,address,string,uint256)"
+    ).hex()
+
+    transferred_topic = Web3.keccak(
+        text="RecordTransferred(bytes32,bytes32,address,uint256)"
+    ).hex()
+
     db: Session = SessionLocal()
-    from_block = START_BLOCK
 
     try:
-        while from_block <= latest:
-            print(f"📦 Fetching block {from_block}")
+        for block_number in range(START_BLOCK, latest + 1):
+            print(f"📦 Fetching block {block_number}")
 
             try:
-                created = contract.events.RecordCreated.get_logs(
-                    fromBlock=from_block,
-                    toBlock=from_block
-                )
+                logs = w3.eth.get_logs({
+                    "fromBlock": block_number,
+                    "toBlock": block_number,
+                    "address": contract.address,
+                    "topics": [[created_topic, transferred_topic]],
+                })
 
-                for ev in created:
-                    handle_record_created(ev, db)
+                for log in logs:
+                    if log["topics"][0].hex() == created_topic:
+                        event = get_event_data(w3.codec, created_event_abi, log)
+                        handle_record_created(event, db)
 
-                transferred = contract.events.RecordTransferred.get_logs(
-                    fromBlock=from_block,
-                    toBlock=from_block
-                )
-
-                for ev in transferred:
-                    handle_record_transferred(ev, db)
+                    elif log["topics"][0].hex() == transferred_topic:
+                        event = get_event_data(w3.codec, transferred_event_abi, log)
+                        handle_record_transferred(event, db)
 
                 db.commit()
-                from_block += 1
 
             except Exception as e:
                 db.rollback()
-                print(f"⚠️ Block {from_block} failed, retrying... {e}")
+                print(f"⚠️ Block {block_number} failed, retrying... {e}")
                 time.sleep(1)
 
     finally:

@@ -65,6 +65,20 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: Phase 4C implemented to harden canonicalization and legacy migration.
 
+### Phase 5–6: Merkle Anchoring, Affidavits & Cryptographic Verification
+
+#### Phase 5 — Merkle Rooting & On-Chain Anchoring
+- Deterministic Merkle tree construction
+- Snapshot anchoring on Ethereum
+- Inclusion proof generation
+
+#### Phase 6 — Affidavit & Verification Infrastructure
+- Court-grade affidavit generation
+- PDF rendering with QR verification
+- End-to-end cryptographic verification pipeline
+
+**Status**: This phase establishes cryptographic proof infrastructure for legal and audit compliance.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry

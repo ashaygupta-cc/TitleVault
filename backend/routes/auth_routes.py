@@ -7,7 +7,7 @@ from jose import jwt, JWTError
 from models import User, RefreshToken, get_db
 from schemas.auth_schema import RegisterRequest, LoginRequest, TokenResponse
 from config import settings
-from deps.auth import require_admin   # IMPORTANT
+from deps.auth import require_admin  
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
