@@ -71,6 +71,13 @@
 - Canonical agreement hashing with Merkle tree integration
 - Agreement-specific verification and affidavit generation
 
+### Vertical Property Ownership Resolution
+- Hierarchical property registration (land → building → flat)
+- Deterministic vertical ownership resolution and validation
+- Flat-level agreement linkage with conditional enforcement
+- Legal hierarchy enforcement for vertical property structures
+- Conditional document generation based on agreement status
+
 ## Testing Strategy
 - Unit tests for individual components
 - Integration tests for API endpoints

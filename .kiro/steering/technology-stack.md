@@ -45,6 +45,10 @@
 - **geopandas**: Advanced geospatial data analysis
 - **rtree**: Spatial indexing for efficient queries
 
+### Property Management & Hierarchy
+- **networkx**: Graph-based property hierarchy analysis
+- **sqlalchemy-utils**: Advanced database utilities for hierarchical data
+
 ## Frontend Technologies (Future Phases)
 - **React**: UI framework
 - **TypeScript**: Type-safe JavaScript

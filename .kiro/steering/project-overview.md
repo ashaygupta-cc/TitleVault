@@ -115,6 +115,16 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: This phase establishes comprehensive legal agreement management with blockchain-backed integrity.
 
+### Phase 10: Flat & Building Ownership Resolution Layer
+- Register buildings under land parcels
+- Register flats under buildings
+- Deterministic vertical ownership resolution
+- Flat-level agreement linkage
+- Conditional affidavit & PDF generation (ACTIVE agreements only)
+- Legal enforcement of vertical property hierarchy
+
+**Status**: This phase completes vertical property ownership resolution with hierarchical legal enforcement.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry
