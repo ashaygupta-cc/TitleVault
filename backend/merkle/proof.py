@@ -2,10 +2,6 @@ from web3 import Web3
 
 
 def generate_proof(tree: list[list[bytes]], index: int) -> list[bytes]:
-    """
-    Generate Merkle inclusion proof for leaf at `index`.
-    """
-
     if index < 0 or index >= len(tree[0]):
         raise IndexError("Leaf index out of range")
 
@@ -14,11 +10,17 @@ def generate_proof(tree: list[list[bytes]], index: int) -> list[bytes]:
 
     for level in tree[:-1]:
         sibling_index = idx ^ 1
+
         if sibling_index < len(level):
             proof.append(level[sibling_index])
+        else:
+            # duplicate self when odd count
+            proof.append(level[idx])
+
         idx //= 2
 
     return proof
+
 
 
 def verify_proof(

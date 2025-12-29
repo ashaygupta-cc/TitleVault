@@ -78,6 +78,13 @@
 - Legal hierarchy enforcement for vertical property structures
 - Conditional document generation based on agreement status
 
+### Public Explorer & Discovery
+- Comprehensive public registry exploration without privileged access
+- Unified subject inspection interface for all property types
+- Advanced search and filtering capabilities with geographic discovery
+- Agreement visibility with transparent filtering and analytics
+- Real-time registry statistics and public transparency features
+
 ### Public Discovery & Transparency
 - Comprehensive public registry explorer with unified subject inspection
 - Transparent agreement visibility with advanced filtering capabilities

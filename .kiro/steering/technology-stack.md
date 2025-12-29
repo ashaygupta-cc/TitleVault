@@ -51,6 +51,11 @@
 
 ### Public API & Discovery
 - **flask-cors**: Cross-origin resource sharing for public APIs
+- **elasticsearch**: Advanced search and discovery capabilities
+- **redis**: Caching for high-performance public endpoints
+
+### Public API & Discovery
+- **flask-cors**: Cross-origin resource sharing for public APIs
 - **flask-limiter**: Rate limiting for public endpoints
 - **elasticsearch**: Advanced search and discovery capabilities (future)
 
