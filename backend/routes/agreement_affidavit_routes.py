@@ -7,6 +7,9 @@ import tempfile
 from web3 import Web3
 from fastapi.responses import FileResponse
 
+from eth_account import Account
+from eth_account.messages import encode_defunct
+
 from models import Agreement, get_db
 from web3_client import w3
 from affidavit.agreement_qr_payload import build_agreement_qr_payload
@@ -14,9 +17,10 @@ from affidavit.agreement_renderer import render_agreement_pdf
 from routes.agreement_enforcement_routes import enforce_agreement
 from canonicalize import canonicalize_to_bytes
 
-from merkle.proof import verify_proof
+from merkle.proof import verify_proof, generate_proof
 from merkle.utils import agreement_leaf_hash
 from merkle.tree import build_merkle_tree
+from config import settings
 
 
 router = APIRouter(tags=["Agreement Affidavit"])
@@ -41,9 +45,12 @@ def _build_agreement_affidavit(
     # --------------------------------------------------
     # MERKLE VERIFICATION (ANCHOR-SAFE)
     # --------------------------------------------------
-    anchored_agreements = db.query(Agreement).filter(
-        Agreement.tx_hash.isnot(None)
-    ).order_by(Agreement.created_at.asc()).all()
+    anchored_agreements = (
+        db.query(Agreement)
+        .filter(Agreement.tx_hash.isnot(None))
+        .order_by(Agreement.created_at.asc())
+        .all()
+    )
 
     if not anchored_agreements:
         raise HTTPException(400, "No anchored agreements found")
@@ -76,8 +83,6 @@ def _build_agreement_affidavit(
         )
 
     index = leaves.index(leaf)
-
-    from merkle.proof import generate_proof
     proof = generate_proof(tree, index)
 
     merkle_valid, computed_root = verify_proof(
@@ -94,7 +99,7 @@ def _build_agreement_affidavit(
         "type": "AGREEMENT_AFFIDAVIT",
         "schema_version": "1.0.0",
         "system": "Blockchain Land Registry",
-        "network": "Ethereum Sepolia",
+        "network": "Ethereum",
         "chain_id": w3.eth.chain_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
 
@@ -104,7 +109,7 @@ def _build_agreement_affidavit(
             "subject_id": agreement.subject_id,
             "subject_type": agreement.subject_type,
             "agreement_type": canonical_terms.get("agreement_type"),
-            "status": agreement.status,
+            "status": agreement.status.name,
             "terms": canonical_terms,
         },
 
@@ -117,16 +122,38 @@ def _build_agreement_affidavit(
         },
 
         "enforcement_snapshot": enforcement,
+
+        "registrar_address": settings.REGISTRAR_ADDRESS,
     }
 
+    # --------------------------------------------------
+    # CANONICAL HASH
+    # --------------------------------------------------
     canonical_bytes = canonicalize_to_bytes(affidavit)
-    affidavit_hash = Web3.keccak(canonical_bytes)
+    affidavit_hash_bytes = Web3.keccak(canonical_bytes)
+    affidavit_hash = "0x" + affidavit_hash_bytes.hex()
+    affidavit["affidavit_hash"] = affidavit_hash
 
-    affidavit["affidavit_hash"] = "0x" + affidavit_hash.hex()
+    # --------------------------------------------------
+    # DIGITAL SIGNATURE (REAL, REGISTRY-GRADE)
+    # --------------------------------------------------
+    if not settings.REGISTRAR_PRIVATE_KEY:
+        raise RuntimeError("Registrar private key not configured")
+
+    msg = encode_defunct(hexstr=affidavit_hash)
+    signed = Account.sign_message(msg, settings.REGISTRAR_PRIVATE_KEY)
+
+    affidavit["signature"] = {
+    "signer": settings.REGISTRAR_ADDRESS,
+    "signature": signed.signature.hex(),
+    }
+
+    # --------------------------------------------------
+    # QR PAYLOAD
+    # --------------------------------------------------
     affidavit["qr_payload"] = build_agreement_qr_payload(affidavit)
 
     return affidavit
-
 
 
 # ======================================================

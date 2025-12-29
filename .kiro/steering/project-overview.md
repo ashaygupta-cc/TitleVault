@@ -169,6 +169,62 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: This phase completes the system with comprehensive archival capabilities and institutional freeze readiness.
 
+## Finalized End-to-End System (Post-Phase 15)
+
+### Finalized Blockchain Registry, Agreement & Affidavit System (Phases 1–9*)
+
+After completing Phase 15, extensive bug fixes and system hardening resulted in a production-grade, fully operational blockchain-backed registry and agreement system.
+
+#### Phase 1* — Core Registry Foundation
+- Finalized FastAPI application bootstrap and registry configuration
+- Established canonical core data models and schema invariants
+- Production-ready application architecture and configuration management
+
+#### Phase 2* — Canonicalization & Deterministic Hashing
+- Implemented canonical JSON normalization with mathematical guarantees
+- Deterministic byte encoding and cryptographic hashing guarantees
+- Consistent hash generation across all system components
+
+#### Phase 3* — Web3 & On-Chain Interaction Layer
+- Blockchain client abstraction layer for seamless Web3 integration
+- Registry smart contract interaction logic with error handling
+- Transaction submission and receipt handling with retry mechanisms
+
+#### Phase 4* — Indexer, Chain Synchronization & Replay
+- Live blockchain event listener with real-time synchronization
+- Historical registry replay and recovery support for complete data reconstruction
+- Deterministic off-chain state reconstruction from blockchain events
+
+#### Phase 5* — Registry Lifecycle & Subdivision Core
+- Registry record lifecycle APIs with comprehensive state management
+- Subdivision creation, validation, and enforcement with spatial integrity
+- Parent–child lineage guarantees across records with immutable relationships
+
+#### Phase 6* — Merkle Anchoring, Affidavits & Cryptographic Verification
+- Merkle root construction and on-chain anchoring for data integrity
+- Inclusion proof generation and verification with mathematical certainty
+- Court-grade affidavit rendering and cryptographic validation for legal compliance
+
+#### Phase 7* — Registry Deployment & Operational Hardening
+- Refactored deterministic deployment scripts for consistent deployments
+- Split resolver and root anchor deployments for modular architecture
+- Clarified on-chain registry initialization flow with comprehensive documentation
+- Removed deprecated deployment endpoints for system clarity
+
+#### Phase 8* — Court-Grade Affidavit System
+- Registry, agreement, and flat affidavit standardization across all entity types
+- Registry-specific QR payloads and renderers for offline verification
+- Real ECDSA registrar digital signatures for cryptographic authenticity
+- Stabilized court bundle generation and verification artifacts for legal proceedings
+
+#### Phase 9* — Agreement Ledger & Merkle Anchor Infrastructure
+- Introduced AgreementLedger contract for comprehensive agreement management
+- Introduced AgreementMerkleAnchor for agreement state verification and integrity
+- Deterministic deployment scripts for agreement system consistency
+- Phase-aligned on-chain agreement infrastructure with full blockchain backing
+
+**Status**: This finalization establishes a complete, production-grade, blockchain-backed registry and agreement system with full on-chain, off-chain, and court-verifiable guarantees. The system provides mathematical certainty of data integrity, legal-grade evidence generation, and comprehensive audit capabilities.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry

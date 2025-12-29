@@ -5,16 +5,21 @@ from sqlalchemy import (
     Numeric,
     LargeBinary,
     Text,
+    Enum,
+    Integer,
     ForeignKey,
     Boolean,
 )
+
+import enum
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func, text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy import create_engine
 from geoalchemy2 import Geometry
 import uuid
+from sqlalchemy.dialects.postgresql import UUID
 
 from config import settings
 
@@ -51,7 +56,6 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
 
-    # Roles stored as JSONB array: ["admin", "user"]
     roles = Column(
         JSONB,
         nullable=False,
@@ -65,11 +69,7 @@ class User(Base):
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
-    id = Column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     user_id = Column(
         UUID(as_uuid=True),
@@ -82,7 +82,7 @@ class RefreshToken(Base):
 
 
 # ------------------------------------------
-# PROPERTY RECORD MODEL (CORE LEGAL OBJECT)
+# PROPERTY RECORD MODEL
 # ------------------------------------------
 class PropertyRecord(Base):
     __tablename__ = "property_records"
@@ -93,58 +93,40 @@ class PropertyRecord(Base):
         server_default=text("uuid_generate_v4()"),
     )
 
-    # Immutable canonical hash (bytes32)
     record_hash = Column(LargeBinary(32), unique=True, nullable=False)
-
-    # Explicit canonical hash (future-proofing / migration-safe)
     canonical_hash = Column(LargeBinary(32), nullable=True)
 
-    # Prevent double subdivision
     subdivision_locked = Column(
         Boolean,
         nullable=False,
         server_default=text("false"),
     )
 
-    # LEGACY | CANONICAL
     format = Column(
         String,
         nullable=False,
         server_default=text("'LEGACY'"),
     )
 
-    # IPFS CID (canonical JSON bytes)
     cid = Column(Text, nullable=False)
-
     owner_address = Column(String, nullable=True)
-
-    # Parent record hash (for subdivision / transfer lineage)
     parent_record = Column(LargeBinary(32), nullable=True)
 
-    # Canonical JSON (sorted, deterministic)
     canonical_json = Column(JSONB, nullable=False)
 
-    # PostGIS geometry (authoritative boundary)
     geom = Column(
         Geometry(geometry_type="POLYGON", srid=4326),
         nullable=True,
     )
 
-    # Geodesic area in square meters
     area_m2 = Column(Numeric, nullable=True)
 
-    # -----------------------------
-    # LEGAL EXTENSIONS (IMPORTANT)
-    # -----------------------------
-
-    # PRIMARY | SUBDIVISION | RESIDUAL
     parcel_type = Column(
         String,
         nullable=False,
         server_default=text("'PRIMARY'"),
     )
 
-    # Whether this parcel can be transferred independently
     is_transferable = Column(
         Boolean,
         nullable=False,
@@ -170,13 +152,8 @@ class MerkleSnapshot(Base):
         server_default=text("uuid_generate_v4()"),
     )
 
-    # Merkle root (bytes32)
     root = Column(LargeBinary(32), nullable=False, index=True)
-
-    # On-chain anchoring tx hash
     tx_hash = Column(String(66), nullable=False, unique=True)
-
-    # Block where root was anchored
     block_number = Column(Numeric, nullable=False)
 
     anchored_at = Column(
@@ -187,7 +164,7 @@ class MerkleSnapshot(Base):
 
 
 # ------------------------------------------
-# AUDIT LOG MODEL (RENAMED SAFELY)
+# AUDIT LOG MODEL
 # ------------------------------------------
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -199,10 +176,8 @@ class AuditLog(Base):
     )
 
     action = Column(String, nullable=False)
-
     record_hash = Column(LargeBinary(32), nullable=True)
 
-    # ⚠️ DO NOT name this `metadata` (reserved by SQLAlchemy)
     metadata_json = Column(JSONB, nullable=True)
 
     timestamp = Column(
@@ -210,3 +185,137 @@ class AuditLog(Base):
         server_default=func.now(),
         nullable=False,
     )
+
+
+# =========================================================
+# AGREEMENT MODELS — PHASE 9
+# =========================================================
+
+class AgreementStatus(enum.Enum):
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    COMPLETED = "COMPLETED"
+    DEFAULTED = "DEFAULTED"
+    CANCELLED = "CANCELLED"
+
+
+class Agreement(Base):
+    __tablename__ = "agreements"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,                # ✅ ADD THIS
+        server_default=func.gen_random_uuid(),
+        nullable=False,
+    )
+
+    # 🔗 SUBJECT LINKAGE
+    subject_type = Column(String, nullable=False)   # LAND | FLAT
+    subject_id = Column(String, nullable=False)     # hex id
+
+    canonical_json = Column(JSONB, nullable=False)
+
+    agreement_hash = Column(LargeBinary(32), nullable=False)
+
+    tx_hash = Column(String(66), nullable=True)
+    closed_tx = Column(String(66), nullable=True)
+
+    record_hash = Column(LargeBinary(32), nullable=True)
+    flat_id = Column(UUID(as_uuid=True), nullable=True)
+
+    flat_hash = Column(LargeBinary(32), nullable=True)
+
+    status = Column(
+        Enum(AgreementStatus),
+        nullable=False,
+        default=AgreementStatus.DRAFT,
+    )
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    installments = relationship(
+        "AgreementInstallment",
+        back_populates="agreement",
+        cascade="all, delete-orphan",
+    )
+
+
+class AgreementInstallment(Base):
+    __tablename__ = "agreement_installments"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,                
+        server_default=func.gen_random_uuid(),
+        nullable=False,
+    )
+
+    agreement_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("agreements.id"),
+        nullable=False,
+    )
+
+    amount = Column(Numeric(20, 2), nullable=False)
+    due_date = Column(DateTime(timezone=True), nullable=False)
+
+    is_paid = Column(Boolean, default=False)
+    paid_at = Column(DateTime(timezone=True))
+
+    agreement = relationship("Agreement", back_populates="installments")
+
+
+
+# =========================================================
+# BUILDING & FLAT REGISTRY
+# =========================================================
+
+class Building(Base):
+    __tablename__ = "buildings"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,               
+        server_default=func.gen_random_uuid(),
+        nullable=False,
+    )
+
+    land_record_hash = Column(LargeBinary(32), nullable=False)
+
+    name = Column(String, nullable=False)
+    total_floors = Column(Integer, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    flats = relationship("FlatUnit", backref="building")
+
+
+
+class FlatUnit(Base):
+    __tablename__ = "flat_units"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    flat_hash = Column(LargeBinary(32), nullable=True, unique=True)
+
+    building_id = Column(UUID(as_uuid=True), ForeignKey("buildings.id"), nullable=False)
+
+    land_record_hash = Column(String, nullable=False)
+
+    flat_number = Column(String, nullable=False)
+    floor_number = Column(String)
+    owner_address = Column(String, nullable=False)
+    area_m2 = Column(Numeric, nullable=False)
+
+    is_transferable = Column(Boolean, default=True)
+
+    # NOTE:
+    # This is a cached hint only.
+    # Canonical lock enforcement is via AgreementLedger (on-chain).
+    is_locked = Column(Boolean, default=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

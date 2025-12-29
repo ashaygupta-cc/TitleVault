@@ -11,7 +11,7 @@ import pyproj
 
 from models import PropertyRecord, SessionLocal
 from config import settings
-from web3_client import contract, w3
+from web3_client import registry_resolver_contract, w3
 from ipfs_client import fetch_raw_from_ipfs
 
 
@@ -137,8 +137,8 @@ MAX_BLOCKS = 2000
 def sync_from_chain():
     print("🔄 Syncing Registry from blockchain...")
 
-    if contract is None:
-        print("❌ Contract not initialized")
+    if registry_resolver_contract is None:
+        print("❌ RegistryResolver contract not initialized")
         return
 
     chain_latest = w3.eth.block_number
@@ -147,8 +147,9 @@ def sync_from_chain():
     print(f"🔍 Sync range: {START_BLOCK} → {latest}")
 
     # Event ABIs
-    created_event_abi = contract.events.RecordCreated._get_event_abi()
-    transferred_event_abi = contract.events.RecordTransferred._get_event_abi()
+    created_event_abi = registry_resolver_contract.events.RecordCreated._get_event_abi()
+    transferred_event_abi = registry_resolver_contract.events.RecordTransferred._get_event_abi()
+
 
     created_topic = Web3.keccak(
     text="RecordCreated(bytes32,address,string,uint256,address)"
@@ -168,7 +169,7 @@ def sync_from_chain():
                 logs = w3.eth.get_logs({
                     "fromBlock": block_number,
                     "toBlock": block_number,
-                    "address": contract.address,
+                    "address": registry_resolver_contract.address,
                     "topics": [[created_topic, transferred_topic]],
                 })
 

@@ -2,6 +2,10 @@
 
 import json
 import unicodedata
+from decimal import Decimal
+from datetime import datetime
+from uuid import UUID
+from enum import Enum
 from web3 import Web3
 
 
@@ -12,15 +16,31 @@ def canonicalize_to_bytes(data: dict) -> bytes:
     - Sorted keys
     - No whitespace
     - Stable byte output
+    - Decimal, datetime, UUID, Enum safe
     """
 
     def normalize(obj):
         if isinstance(obj, str):
             return unicodedata.normalize("NFC", obj)
-        elif isinstance(obj, dict):
+
+        if isinstance(obj, Decimal):
+            return int(obj) if obj == obj.to_integral() else float(obj)
+
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+
+        if isinstance(obj, UUID):
+            return str(obj)
+
+        if isinstance(obj, Enum):
+            return obj.name
+
+        if isinstance(obj, dict):
             return {k: normalize(v) for k, v in sorted(obj.items())}
-        elif isinstance(obj, list):
+
+        if isinstance(obj, list):
             return [normalize(x) for x in obj]
+
         return obj
 
     normalized = normalize(data)

@@ -205,9 +205,44 @@ def render_agreement_pdf(affidavit: dict, output_path: str):
         font="Helvetica-Bold",
     )
 
-    # -------- H. Registrar Signature --------
+    # -------- H. Cryptographic Attestation --------
     y -= 8 * mm
-    draw_line("H. Registrar Signature", "Helvetica-Bold", 12)
+    draw_line("H. Cryptographic Attestation", "Helvetica-Bold", 12)
+
+    draw_line("Affidavit Hash (keccak256):", "Helvetica-Bold")
+    draw_line(affidavit["affidavit_hash"])
+
+    draw_line("Registrar Address:", "Helvetica-Bold")
+    draw_line(affidavit.get("registrar_address", "NOT DISCLOSED"))
+
+    draw_line("Digital Signature:", "Helvetica-Bold")
+
+    sig = affidavit.get("signature")
+
+    if sig and isinstance(sig, dict):
+        digital_sig = sig.get("signature", "UNSIGNED")
+    else:
+        digital_sig = "UNSIGNED — REGISTRAR DIGITAL SIGNATURE NOT APPLIED"
+
+    y = draw_paragraph(
+        c,
+        digital_sig,
+        25 * mm,
+        y,
+        160 * mm,
+        font="Helvetica",
+        font_size=7,
+        leading=12,
+    )
+
+    draw_line(
+        "Signature Algorithm: secp256k1 (Ethereum ECDSA)",
+        "Helvetica-Bold",
+    )
+
+    # -------- I. Registrar Signature --------
+    y -= 10 * mm
+    draw_line("I. Registrar Signature", "Helvetica-Bold", 12)
 
     c.setFont("Helvetica", 11)
     c.drawString(25 * mm, y, "Registrar Signature :")
@@ -226,41 +261,6 @@ def render_agreement_pdf(affidavit: dict, output_path: str):
     y -= 12 * mm
     draw_line(f"Date: {datetime.now().strftime('%d-%m-%Y')}")
     draw_line(f"Time: {datetime.now().strftime('%I:%M:%S %p')}")
-
-    # -------- I. Cryptographic Attestation --------
-    y -= 10 * mm
-    draw_line("I. Cryptographic Attestation", "Helvetica-Bold", 12)
-
-    draw_line("Affidavit Hash (keccak256):", "Helvetica-Bold")
-    draw_line(affidavit["affidavit_hash"])
-
-    draw_line("Registrar Address:", "Helvetica-Bold")
-    draw_line(
-        affidavit.get("registrar_address", "NOT DISCLOSED"),
-    )
-
-    draw_line("Digital Signature:", "Helvetica-Bold")
-
-    digital_sig = affidavit.get(
-        "digital_signature",
-        "UNSIGNED – REGISTRAR DIGITAL SIGNATURE NOT APPLIED",
-    )
-
-    y = draw_paragraph(
-        c,
-        digital_sig,
-        25 * mm,
-        y,
-        160 * mm,
-        font="Helvetica",
-        font_size=8,
-        leading=12,
-    )
-
-    draw_line(
-        "Signature Algorithm: secp256k1 (Ethereum ECDSA)",
-        "Helvetica-Bold",
-    )
 
     # -------- J. QR (FAIL-SAFE) --------
     try:

@@ -12,7 +12,7 @@ from eth_keys.exceptions import BadSignature
 
 from models import get_db, PropertyRecord, MerkleSnapshot
 
-from affidavit.renderer import render_affidavit_pdf
+from affidavit.registry_renderer import render_registry_affidavit_pdf
 from affidavit.hash import compute_affidavit_hash
 from affidavit.signature import sign_affidavit_hash
 from schemas.affidavit_schema import (
@@ -269,7 +269,7 @@ def download_affidavit_pdf(record_hash: str, db: Session = Depends(get_db)):
     tmp_dir.mkdir(exist_ok=True)
 
     pdf_path = tmp_dir / f"affidavit_{record_hash.replace('0x','')}.pdf"
-    render_affidavit_pdf(affidavit, str(pdf_path))
+    render_registry_affidavit_pdf(affidavit, str(pdf_path))
 
     return FileResponse(
         str(pdf_path),

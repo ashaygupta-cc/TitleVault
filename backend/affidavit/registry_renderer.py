@@ -1,4 +1,4 @@
-# affidavit/renderer.py
+# affidavit/registry_renderer.py
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from affidavit.qr import draw_qr_code
-from affidavit.qr_payload import build_affidavit_qr_payload
+from affidavit.registry_qr_payload import build_registry_qr_payload
 from config import settings
 
 PAGE_BOTTOM = 35 * mm
@@ -37,7 +37,7 @@ def draw_paragraph(c, text, x, y, max_width, font="Helvetica", font_size=10, lea
     return text_obj.getY() - leading
 
 
-def render_affidavit_pdf(affidavit: dict, output_path: str):
+def render_registry_affidavit_pdf(affidavit: dict, output_path: str):
     c = canvas.Canvas(output_path, pagesize=A4)
     width, height = A4
 
@@ -277,13 +277,43 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
         leading=14,
     )
 
-    # ---------------- H. SIGNATURE ----------------
+    # ---------------- H. CRYPTOGRAPHIC ATTESTATION ----------------
+    y -= 15 * mm
+    draw_line("H. Cryptographic Attestation", "Helvetica-Bold", 12)
+
+    y -= 2 * mm
+    draw_line("Affidavit Hash (keccak256):", "Helvetica-Bold", 10)
+    draw_line(affidavit["affidavit_hash"])
+
+    y -= 2 * mm
+    draw_line("Registrar Address:", "Helvetica-Bold", 10)
+    draw_line(affidavit["signature"]["signer"])
+
+    y -= 2 * mm
+    draw_line("Digital Signature:", "Helvetica-Bold", 10)
+
+    y = draw_paragraph(
+        c,
+        affidavit["signature"]["signature"],
+        25 * mm,
+        y + 15,
+        160 * mm,
+        font_size=7,
+        leading=12,
+    )
+
+    draw_line(
+        "Signature Algorithm: secp256k1 (Ethereum ECDSA)",
+        "Helvetica-Bold",
+        10,
+    )
+
+    # ---------------- I. REGISTRAR SIGNATURE ----------------
     y -= 6 * mm
-    draw_line("H. Registrar Signature", "Helvetica-Bold", 12)
+    draw_line("I. Registrar Signature", "Helvetica-Bold", 12)
 
     c.setFont("Helvetica", 12)
     y -= 4 * mm
-
     draw_line("Registrar Signature : ", "Helvetica", 12)
 
     signature_path = Path("assets/signature.jpeg")
@@ -301,39 +331,9 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
     draw_line(f"Date: {datetime.now().strftime('%d-%m-%Y')}")
     draw_line(f"Time: {datetime.now().strftime('%I:%M:%S %p')}")
 
-    # ---------------- I. CRYPTOGRAPHIC ATTESTATION ----------------
-    y -= 15 * mm
-    draw_line("I. Cryptographic Attestation", "Helvetica-Bold", 12)
-    
-    y -= 2 * mm
-
-    draw_line("Affidavit Hash (keccak256):","Helvetica-Bold", 10)
-    draw_line(affidavit["affidavit_hash"])
-
-    y -= 2 * mm
-
-    draw_line("Registrar Address:","Helvetica-Bold", 10)
-    draw_line(affidavit["signature"]["signer"])
-
-    y -= 2 * mm
-
-    draw_line("Digital Signature:","Helvetica-Bold", 10)
-
-    y = draw_paragraph(
-        c,
-        affidavit["signature"]["signature"],
-        25 * mm,
-        y + 15,
-        160 * mm,
-        font_size=7,
-        leading=12,
-    )
-
-    draw_line("Signature Algorithm: secp256k1 (Ethereum ECDSA)","Helvetica-Bold", 10)
-
     # ---------------- J. QR ----------------
     ensure_space(8)
-    qr_payload = build_affidavit_qr_payload(affidavit)
+    qr_payload = build_registry_qr_payload(affidavit)
     draw_qr_code(c, qr_payload, 150, 25, 35)
 
     c.setFont("Helvetica", 8)

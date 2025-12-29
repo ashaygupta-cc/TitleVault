@@ -1,5 +1,3 @@
-# backend/routes/subdivision_routes.py
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from shapely.geometry import Polygon
@@ -8,14 +6,12 @@ import json
 
 from models import PropertyRecord, get_db
 from schemas.subdivision_schema import SubdivideRequest
-from utils.bytes32 import to_bytes32
+from utils.bytes32 import parse_bytes32
 from utils.polygon_validation import validate_subdivision
 from utils.area import geodesic_area_m2
-
 from canonicalize import canonicalize_to_bytes, compute_keccak256_from_bytes
 from ipfs_client import upload_bytes_to_ipfs
-from web3_client import send_subdivide_record_tx
-
+from web3_client import send_subdivide_record_tx, is_subject_locked_on_chain
 
 router = APIRouter(tags=["Subdivision"])
 
@@ -25,46 +21,47 @@ AREA_TOLERANCE = 0.99  # ≥99% conservation
 @router.post("/subdivide")
 def subdivide_record(req: SubdivideRequest, db: Session = Depends(get_db)):
 
+    # ✅ STRICT parse (NO padding)
+    parent_hash_bytes = parse_bytes32(req.parent_record_hash)
+
     parent = db.query(PropertyRecord).filter(
-        PropertyRecord.record_hash == to_bytes32(req.parent_record_hash)
+        PropertyRecord.record_hash == parent_hash_bytes
     ).first()
 
     if not parent:
         raise HTTPException(404, "Parent record not found")
 
+    # 🔒 Agreement lock enforcement
+    if is_subject_locked_on_chain(req.parent_record_hash, False):
+        raise HTTPException(409, "Record locked under active agreement")
+
     if parent.subdivision_locked:
         raise HTTPException(400, "Record already subdivided")
 
-    parent_polygon = Polygon(json.loads(parent.canonical_json)["polygon"])
+    canonical_parent = json.loads(parent.canonical_json)
+    parent_polygon = Polygon(canonical_parent["polygon"])
     parent_area = geodesic_area_m2(parent_polygon)
 
-    # --- Build child polygons
     child_polys = [Polygon(c.polygon) for c in req.children]
 
-    # --- Geometry validation (containment + non-self-intersection)
     validate_subdivision(
         parent_polygon.exterior.coords,
         [c.polygon for c in req.children]
     )
 
-    # --- Area validation
     union_geom = unary_union(child_polys)
     union_area = geodesic_area_m2(union_geom)
 
     if union_area > parent_area * 1.01:
-        raise HTTPException(
-            400,
-            "Invalid subdivision: child parcels overlap or exceed parent area"
-        )
+        raise HTTPException(400, "Child parcels exceed parent area")
 
-    if union_area < parent_area * AREA_TOLERANCE:
-        residual_required = True
-    else:
-        residual_required = False
+    residual_required = union_area < parent_area * AREA_TOLERANCE
 
     created_children = []
 
-    # --- Create child parcels
+    # ======================================================
+    # CHILD PARCELS
+    # ======================================================
     for child, poly in zip(req.children, child_polys):
         area = geodesic_area_m2(poly)
 
@@ -77,32 +74,37 @@ def subdivide_record(req: SubdivideRequest, db: Session = Depends(get_db)):
         }
 
         canonical = canonicalize_to_bytes(payload)
-        record_hash = compute_keccak256_from_bytes(canonical)
+        record_hash_hex = compute_keccak256_from_bytes(canonical)
+        record_hash_bytes = parse_bytes32(record_hash_hex)
+
         cid = upload_bytes_to_ipfs(canonical)
 
         send_subdivide_record_tx(
             req.parent_record_hash,
-            record_hash,
+            record_hash_hex,
             cid,
             parent.owner_address,
         )
 
         db.add(PropertyRecord(
-            record_hash=to_bytes32(record_hash),
-            canonical_hash=to_bytes32(record_hash),
+            record_hash=record_hash_bytes,
+            canonical_hash=record_hash_bytes,
             format="CANONICAL",
             owner_address=parent.owner_address,
             cid=cid,
-            canonical_json=canonical.decode(),
+            canonical_json=canonical.decode("utf-8"),
             geom=f"SRID=4326;{poly.wkt}",
             area_m2=area,
             parent_record=parent.record_hash,
+            is_transferable=True,
         ))
 
-        created_children.append(record_hash)
+        created_children.append(record_hash_hex)
 
-    # --- Residual parcel (Option B)
-    residual_hash = None
+    # ======================================================
+    # RESIDUAL PARCEL (IF ANY)
+    # ======================================================
+    residual_hash_hex = None
 
     if residual_required:
         residual_geom = parent_polygon.difference(union_geom)
@@ -118,26 +120,29 @@ def subdivide_record(req: SubdivideRequest, db: Session = Depends(get_db)):
             }
 
             canonical = canonicalize_to_bytes(payload)
-            residual_hash = compute_keccak256_from_bytes(canonical)
+            residual_hash_hex = compute_keccak256_from_bytes(canonical)
+            residual_hash_bytes = parse_bytes32(residual_hash_hex)
+
             cid = upload_bytes_to_ipfs(canonical)
 
             send_subdivide_record_tx(
                 req.parent_record_hash,
-                residual_hash,
+                residual_hash_hex,
                 cid,
                 parent.owner_address,
             )
 
             db.add(PropertyRecord(
-                record_hash=to_bytes32(residual_hash),
-                canonical_hash=to_bytes32(residual_hash),
+                record_hash=residual_hash_bytes,
+                canonical_hash=residual_hash_bytes,
                 format="CANONICAL",
                 owner_address=parent.owner_address,
                 cid=cid,
-                canonical_json=canonical.decode(),
+                canonical_json=canonical.decode("utf-8"),
                 geom=f"SRID=4326;{residual_geom.wkt}",
                 area_m2=residual_area,
                 parent_record=parent.record_hash,
+                is_transferable=False,
             ))
 
     parent.subdivision_locked = True
@@ -148,5 +153,5 @@ def subdivide_record(req: SubdivideRequest, db: Session = Depends(get_db)):
         "parent_record": req.parent_record_hash,
         "children_created": len(created_children),
         "residual_created": residual_required,
-        "residual_record_hash": residual_hash,
+        "residual_record_hash": residual_hash_hex,
     }

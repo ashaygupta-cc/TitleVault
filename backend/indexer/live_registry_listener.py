@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from web3 import Web3
 from web3._utils.events import get_event_data
 
-from web3_client import contract, w3
+from web3_client import registry_resolver_contract, w3
 from models import SessionLocal
 from indexer.registry_indexer import (
     handle_record_created,
@@ -11,8 +11,8 @@ from indexer.registry_indexer import (
 )
 
 # Precompute event ABI + topics
-created_event_abi = contract.events.RecordCreated._get_event_abi()
-transferred_event_abi = contract.events.RecordTransferred._get_event_abi()
+created_event_abi = registry_resolver_contract.events.RecordCreated._get_event_abi()
+transferred_event_abi = registry_resolver_contract.events.RecordTransferred._get_event_abi()
 
 CREATED_TOPIC = Web3.keccak(
     text="RecordCreated(bytes32,address,string,uint256)"
@@ -37,7 +37,7 @@ async def listen_registry_events():
                     logs = w3.eth.get_logs({
                         "fromBlock": block_number,
                         "toBlock": block_number,
-                        "address": contract.address,
+                        "address": registry_resolver_contract.address,
                         "topics": [[CREATED_TOPIC, TRANSFERRED_TOPIC]],
                     })
 

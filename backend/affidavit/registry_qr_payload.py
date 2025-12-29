@@ -1,7 +1,7 @@
-# affidavit/qr_payload.py
+# affidavit/registry_qr_payload.py
 import json
 
-def build_affidavit_qr_payload(affidavit: dict) -> dict:
+def build_registry_qr_payload(affidavit: dict) -> dict:
 
     record = affidavit["record"]
     geometry = affidavit.get("geometry", {})

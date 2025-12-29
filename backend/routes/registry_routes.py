@@ -1,12 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-
 from shapely.geometry import Polygon as ShapelyPolygon
 from datetime import datetime
-
 import json
 from sqlalchemy import text
-from deps.auth import require_admin
+
+from deps.auth import require_admin  
 
 from models import PropertyRecord, get_db
 from schemas.registry_schema import (
@@ -14,42 +13,31 @@ from schemas.registry_schema import (
     CreateRecordResponse,
     TransferRecordRequest,
 )
-
-from canonicalize import (
-    canonicalize_to_bytes,
-    compute_keccak256_from_bytes,
-)
+from canonicalize import canonicalize_to_bytes, compute_keccak256_from_bytes
 from ipfs_client import upload_bytes_to_ipfs, fetch_raw_from_ipfs
 from web3_client import (
     send_create_record_tx,
     send_transfer_record_tx,
     get_record_from_chain,
+    is_subject_locked_on_chain,
 )
-from utils.bytes32 import to_bytes32
+from utils.bytes32 import parse_bytes32
 from utils.geometry import aggregate_child_polygons
 
-
 router = APIRouter(tags=["registry"])
-
 
 
 # ======================================================
 # POST /registry/create
 # ======================================================
 @router.post("/create", response_model=CreateRecordResponse)
-def create_record(
-    req: CreateRecordRequest,
-    db: Session = Depends(get_db)
-):
-
-    print("\n================ CREATE RECORD =================")
+def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
 
     coords = req.polygon.coordinates
     if coords[0] != coords[-1]:
-        raise HTTPException(status_code=400, detail="Polygon must be closed")
+        raise HTTPException(400, "Polygon must be closed")
 
     shapely_poly = ShapelyPolygon(coords)
-    geom_wkt = shapely_poly.wkt
 
     record_json = {
         "owner": req.owner_address,
@@ -58,9 +46,10 @@ def create_record(
     }
 
     canonical_bytes = canonicalize_to_bytes(record_json)
-
     record_hash_hex = compute_keccak256_from_bytes(canonical_bytes)
-    record_hash_bytes = to_bytes32(record_hash_hex)
+
+    # ✅ STRICT – no padding
+    record_hash_bytes = parse_bytes32(record_hash_hex)
 
     cid = upload_bytes_to_ipfs(canonical_bytes)
 
@@ -71,59 +60,59 @@ def create_record(
         registrar_sig=b"",
     )
 
-    new_record = PropertyRecord(
+    record = PropertyRecord(
         cid=cid,
         record_hash=record_hash_bytes,
         canonical_hash=record_hash_bytes,
         format="CANONICAL",
         owner_address=req.owner_address,
         canonical_json=canonical_bytes.decode("utf-8"),
-        geom=f"SRID=4326;{geom_wkt}",
+        geom=f"SRID=4326;{shapely_poly.wkt}",
     )
 
-    db.add(new_record)
+    db.add(record)
     db.commit()
-    db.refresh(new_record)
+    db.refresh(record)
 
     area_m2 = db.execute(
         text("SELECT ST_Area(geom::geography) FROM property_records WHERE id = :id"),
-        {"id": str(new_record.id)},
+        {"id": str(record.id)},
     ).scalar()
 
-    new_record.area_m2 = area_m2
+    record.area_m2 = area_m2
     db.commit()
 
     return {
-        "id": str(new_record.id),
+        "id": str(record.id),
         "cid": cid,
         "record_hash": record_hash_hex,
         "area_m2": area_m2,
         "tx_hash": tx_hash,
     }
 
+
 # ======================================================
 # POST /registry/transfer
 # ======================================================
 @router.post("/transfer")
-def transfer_record(
-    req: TransferRecordRequest,
-    db: Session = Depends(get_db)
-):
+def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
 
-    old_record = db.query(PropertyRecord).filter(
-        PropertyRecord.record_hash == to_bytes32(req.old_record_hash)
+    old_hash_bytes = parse_bytes32(req.old_record_hash)
+
+    old = db.query(PropertyRecord).filter(
+        PropertyRecord.record_hash == old_hash_bytes
     ).first()
 
-    if not old_record:
-        raise HTTPException(status_code=404, detail="Original record not found")
+    if not old:
+        raise HTTPException(404, "Original record not found")
 
-    if old_record.subdivision_locked:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot transfer subdivided parent record"
-        )
+    if is_subject_locked_on_chain(req.old_record_hash, False):
+        raise HTTPException(409, "Record locked under active agreement")
 
-    old_data = json.loads(old_record.canonical_json)
+    if old.subdivision_locked:
+        raise HTTPException(400, "Cannot transfer subdivided parent record")
+
+    old_data = json.loads(old.canonical_json)
 
     record_json = {
         "owner": req.new_owner_address,
@@ -132,14 +121,13 @@ def transfer_record(
     }
 
     canonical_bytes = canonicalize_to_bytes(record_json)
-
     new_hash_hex = compute_keccak256_from_bytes(canonical_bytes)
-    new_hash_bytes = to_bytes32(new_hash_hex)
+    new_hash_bytes = parse_bytes32(new_hash_hex)
 
     cid = upload_bytes_to_ipfs(canonical_bytes)
 
     tx_hash = send_transfer_record_tx(
-        old_record_hash_hex="0x" + old_record.record_hash.hex(),
+        old_record_hash_hex=req.old_record_hash,
         new_record_hash_hex=new_hash_hex,
         cid=cid,
         new_owner=req.new_owner_address,
@@ -153,21 +141,21 @@ def transfer_record(
         format="CANONICAL",
         owner_address=req.new_owner_address,
         canonical_json=canonical_bytes.decode("utf-8"),
-        geom=old_record.geom,
-        area_m2=old_record.area_m2,
-        parent_record=old_record.record_hash,
+        geom=old.geom,
+        area_m2=old.area_m2,
+        parent_record=old.record_hash,
     )
 
     db.add(new_record)
     db.commit()
-    db.refresh(new_record)
 
     return {
-        "old_record_hash": "0x" + old_record.record_hash.hex(),
+        "old_record_hash": req.old_record_hash,
         "new_record_hash": new_hash_hex,
         "cid": cid,
         "tx_hash": tx_hash,
     }
+
 
 # ======================================================
 # GET /registry/verify/{record_hash}
@@ -175,10 +163,8 @@ def transfer_record(
 @router.get("/verify/{record_hash}")
 def verify_record(record_hash: str, db: Session = Depends(get_db)):
 
-    print("\n================ VERIFY RECORD =================")
-
-    clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
-    record_hash_bytes = bytes.fromhex(clean)
+    record_hash_bytes = parse_bytes32(record_hash)
+    clean = record_hash_bytes.hex()
 
     db_record = db.query(PropertyRecord).filter(
         PropertyRecord.record_hash == record_hash_bytes
@@ -208,9 +194,8 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
     except Exception:
         ipfs_exists = False
 
-    owner, cid, timestamp, registrar, registrar_sig, parent_hash, is_transferable = \
-    get_record_from_chain(record_hash)
-
+    owner, cid, timestamp, registrar, registrar_sig, parent_hash, _ = \
+        get_record_from_chain("0x" + clean)
 
     blockchain_exists = timestamp != 0
     owner_match = owner.lower() == db_record.owner_address.lower()
@@ -224,28 +209,14 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
         )
     )
 
-    is_legacy = db_record.format != "CANONICAL"
+    canonical_bytes = db_record.canonical_json.encode("utf-8")
+    hash_match = compute_keccak256_from_bytes(canonical_bytes) == "0x" + db_record.canonical_hash.hex()
 
-    if is_legacy:
-        hash_match = None
-    else:
-        canonical_bytes = db_record.canonical_json.encode("utf-8")
-        computed_hash = compute_keccak256_from_bytes(canonical_bytes)
-        db_hash_hex = "0x" + db_record.canonical_hash.hex()
-        hash_match = (computed_hash == db_hash_hex)
-
-    if not blockchain_exists:
-        status = "NOT_ON_CHAIN"
-    elif not ipfs_exists:
-        status = "INVALID_IPFS"
-    elif not owner_match or not cid_match or not parent_match:
-        status = "TAMPERED"
-    elif is_legacy:
-        status = "LEGACY"
-    elif hash_match:
-        status = "VERIFIED"
-    else:
-        status = "TAMPERED"
+    status = (
+        "VERIFIED" if blockchain_exists and ipfs_exists and owner_match
+        and cid_match and parent_match and hash_match
+        else "TAMPERED"
+    )
 
     return {
         "record_hash": "0x" + clean,
@@ -257,75 +228,40 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
         "hash_match": hash_match,
         "cid_match": cid_match,
         "owner_match": owner_match,
-        "is_legacy": is_legacy,
+        "is_legacy": False,
     }
+
 
 # ======================================================
 # GET /registry/record/{record_hash}
 # ======================================================
 @router.get("/record/{record_hash}")
-def get_record_details(record_hash: str,db: Session = Depends(get_db)):
+def get_record_details(record_hash: str, db: Session = Depends(get_db)):
 
+    record_hash_bytes = parse_bytes32(record_hash)
 
-    print("\n================ RECORD DETAILS =================")
-
-    clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
-
-    try:
-        record_hash_bytes = bytes.fromhex(clean)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid record_hash")
-
-    record = (
-        db.query(PropertyRecord)
-        .filter(PropertyRecord.record_hash == record_hash_bytes)
-        .first()
-    )
+    record = db.query(PropertyRecord).filter(
+        PropertyRecord.record_hash == record_hash_bytes
+    ).first()
 
     if not record:
-        raise HTTPException(status_code=404, detail="Record not found")
+        raise HTTPException(404, "Record not found")
 
-    # ---- canonical source of truth
     canonical = json.loads(record.canonical_json)
 
-    # ---- find children (for subdivision transparency)
-    children = (
-        db.query(PropertyRecord)
-        .filter(PropertyRecord.parent_record == record.record_hash)
-        .all()
+    children = db.query(PropertyRecord).filter(
+        PropertyRecord.parent_record == record.record_hash
+    ).all()
+
+    polygon = (
+        aggregate_child_polygons(children)
+        if record.subdivision_locked and children
+        else canonical.get("polygon")
     )
 
-    print("📄 Record hash:", record.record_hash.hex())
-    print("🏷 Owner:", record.owner_address)
-    print("📐 Area (m²):", record.area_m2)
-    print("🔒 Subdivided:", record.subdivision_locked)
-    print("👶 Children count:", len(children))
-    print("=================================================\n")
-
-    # ---- geometry selection
-    if record.subdivision_locked and children:
-        polygon = aggregate_child_polygons(children)
-        geometry_source = "children_union"
-    else:
-        polygon = canonical.get("polygon")
-        geometry_source = "self"
-
-    # ---- bounding box
-    bbox = None
-    if polygon:
-        lons = [p[0] for p in polygon]
-        lats = [p[1] for p in polygon]
-        bbox = {
-            "min_lon": min(lons),
-            "min_lat": min(lats),
-            "max_lon": max(lons),
-            "max_lat": max(lats),
-        }
-
-    response = {
+    return {
         "record_hash": "0x" + record.record_hash.hex(),
         "polygon": polygon,
-        "bbox": bbox,
         "area_m2": record.area_m2,
         "is_subdivided": record.subdivision_locked,
         "parent_record": (
@@ -333,21 +269,13 @@ def get_record_details(record_hash: str,db: Session = Depends(get_db)):
             if record.parent_record else None
         ),
         "children_records": [
-            "0x" + c.record_hash.hex()
-            for c in children
+            "0x" + c.record_hash.hex() for c in children
         ],
-        "geometry_source": geometry_source,
+        "owner_address": record.owner_address,
+        "metadata": canonical.get("metadata"),
+        "cid": record.cid,
+        "created_at": record.created_at,
     }
-
-    response.update({
-    "owner_address": record.owner_address,
-    "metadata": canonical.get("metadata"),
-    "cid": record.cid,
-    "created_at": record.created_at,
-    })
-
-
-    return response
 
 
 # ======================================================

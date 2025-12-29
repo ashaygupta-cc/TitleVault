@@ -6,6 +6,9 @@ from datetime import timezone
 from web3 import Web3
 from web3_client import w3
 
+from eth_account import Account
+from eth_account.messages import encode_defunct
+
 from canonicalize import canonicalize_to_bytes
 from models import Agreement, FlatUnit, get_db
 from affidavit.flat_affidavit_renderer import render_flat_affidavit_pdf
@@ -39,8 +42,8 @@ def _build_flat_affidavit(flat: FlatUnit, agreement: Agreement) -> dict:
         "agreement": {
             "agreement_id": str(agreement.id),
             "agreement_hash": "0x" + agreement.agreement_hash.hex(),
-            "subject_id": str(flat.id),          
-            "subject_type": "FLAT",              
+            "subject_id": str(flat.id),
+            "subject_type": "FLAT",
             "activation_tx": agreement.tx_hash,
             "status": agreement.status.name,
             "activated_at": agreement.created_at.astimezone(timezone.utc).isoformat(),
@@ -62,19 +65,25 @@ def _build_flat_affidavit(flat: FlatUnit, agreement: Agreement) -> dict:
 
         # ---------------- REGISTRAR ----------------
         "registrar_address": settings.REGISTRAR_ADDRESS,
-
-        # Explicit signature state (court required)
-        "digital_signature": (
-            agreement.registrar_signature
-            if getattr(agreement, "registrar_signature", None)
-            else "UNSIGNED — REGISTRAR DIGITAL SIGNATURE NOT APPLIED"
-        ),
     }
 
     # ---------------- CANONICAL HASH ----------------
     canonical_bytes = canonicalize_to_bytes(affidavit)
-    affidavit_hash = Web3.keccak(canonical_bytes)
-    affidavit["affidavit_hash"] = "0x" + affidavit_hash.hex()
+    affidavit_hash_bytes = Web3.keccak(canonical_bytes)
+    affidavit_hash = "0x" + affidavit_hash_bytes.hex()
+    affidavit["affidavit_hash"] = affidavit_hash
+
+    # ---------------- DIGITAL SIGNATURE (REAL) ----------------
+    if not settings.REGISTRAR_PRIVATE_KEY:
+        raise RuntimeError("Registrar private key not configured")
+
+    msg = encode_defunct(hexstr=affidavit_hash)
+    signed = Account.sign_message(msg, settings.REGISTRAR_PRIVATE_KEY)
+
+    affidavit["signature"] = {
+    "signer": settings.REGISTRAR_ADDRESS,
+    "signature": signed.signature.hex(),
+    }
 
     # ---------------- QR PAYLOAD ----------------
     affidavit["qr_payload"] = build_agreement_qr_payload(affidavit)
@@ -84,13 +93,9 @@ def _build_flat_affidavit(flat: FlatUnit, agreement: Agreement) -> dict:
 
 # ==================================================
 # GET /flat/affidavit/{flat_id}
-# → JSON affidavit (machine + audit verifiable)
 # ==================================================
 @router.get("/{flat_id}")
-def get_flat_affidavit_json(
-    flat_id: str,
-    db: Session = Depends(get_db),
-):
+def get_flat_affidavit_json(flat_id: str, db: Session = Depends(get_db)):
     flat = db.query(FlatUnit).get(flat_id)
     if not flat:
         raise HTTPException(status_code=404, detail="Flat not found")
@@ -106,23 +111,16 @@ def get_flat_affidavit_json(
     )
 
     if not agreement:
-        raise HTTPException(
-            status_code=400,
-            detail="No active agreement for flat",
-        )
+        raise HTTPException(400, "No active agreement for flat")
 
     return _build_flat_affidavit(flat, agreement)
 
 
 # ==================================================
 # GET /flat/affidavit/{flat_id}/pdf
-# → Court-grade PDF
 # ==================================================
 @router.get("/{flat_id}/pdf")
-def generate_flat_affidavit_pdf(
-    flat_id: str,
-    db: Session = Depends(get_db),
-):
+def generate_flat_affidavit_pdf(flat_id: str, db: Session = Depends(get_db)):
     flat = db.query(FlatUnit).get(flat_id)
     if not flat:
         raise HTTPException(404, "Flat not found")
@@ -147,34 +145,17 @@ def generate_flat_affidavit_pdf(
     tmp.close()
 
     try:
-        render_flat_affidavit_pdf(
-            affidavit=affidavit,
-            output_path=tmp_path,
-        )
+        render_flat_affidavit_pdf(affidavit, tmp_path)
     except Exception as e:
-        # 🔥 CRITICAL: delete broken file
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
-        raise HTTPException(
-            status_code=500,
-            detail=f"PDF rendering failed: {str(e)}",
-        )
-
-    # 🔒 Validate PDF size
-    if os.path.getsize(tmp_path) < 1024:
-        os.unlink(tmp_path)
-        raise HTTPException(
-            status_code=500,
-            detail="Generated PDF is invalid or empty",
-        )
+        raise HTTPException(500, f"PDF rendering failed: {str(e)}")
 
     return FileResponse(
-        path=tmp_path,
+        tmp_path,
         media_type="application/pdf",
         filename=f"flat_affidavit_{flat_id}.pdf",
         headers={
-            "Content-Disposition": (
-                f'inline; filename="flat_affidavit_{flat_id}.pdf"'
-            )
+            "Content-Disposition": f'inline; filename="flat_affidavit_{flat_id}.pdf"'
         },
     )

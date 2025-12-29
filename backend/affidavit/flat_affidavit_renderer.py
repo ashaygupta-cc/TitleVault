@@ -159,10 +159,49 @@ def render_flat_affidavit_pdf(affidavit: dict, output_path: str):
 
     draw_line(f"Registrar Address: {affidavit['registrar_address']}")
 
-    # ---------------- E. REGISTRAR SIGNATURE ----------------
+    # ---------------- E. CRYPTOGRAPHIC ATTESTATION ----------------
+
+    y -= 10 * mm
+    draw_line("E. Cryptographic Attestation", bold=True, size=12)
+
+    y -= 4 * mm
+    draw_line("Affidavit Hash (keccak256):", bold=True)
+    draw_line(affidavit["affidavit_hash"])
+
+    y -= 2 * mm
+    draw_line("Registrar Address:", bold=True)
+    draw_line(affidavit["registrar_address"])
+
+    y -= 4 * mm
+    draw_line("Digital Signature:", bold=True)
+
+    sig = affidavit.get("signature")
+
+    if sig and isinstance(sig, dict):
+        digital_sig = sig.get("signature", "UNSIGNED")
+    else:
+        digital_sig = "UNSIGNED — REGISTRAR DIGITAL SIGNATURE NOT APPLIED"
+
+
+    y = draw_paragraph(
+        c,
+        digital_sig,
+        25 * mm,
+        y,
+        160 * mm,
+        font_size=7,
+        leading=12,
+    )
+
+    draw_line(
+        "Signature Algorithm: secp256k1 (Ethereum ECDSA)",
+        bold=True,
+    )
+
+    # ---------------- F. REGISTRAR SIGNATURE ----------------
 
     y -= 8 * mm
-    draw_line("E. Registrar Signature", bold=True, size=12)
+    draw_line("F. Registrar Signature", bold=True, size=12)
 
     y -= 4 * mm
     c.setFont("Helvetica", 11)
@@ -182,42 +221,6 @@ def render_flat_affidavit_pdf(affidavit: dict, output_path: str):
     y -= 12 * mm
     draw_line(f"Date: {datetime.now().strftime('%d-%m-%Y')}")
     draw_line(f"Time: {datetime.now().strftime('%I:%M:%S %p')}")
-
-    # ---------------- F. CRYPTOGRAPHIC ATTESTATION ----------------
-
-    y -= 10 * mm
-    draw_line("F. Cryptographic Attestation", bold=True, size=12)
-
-    y -= 4 * mm
-    draw_line("Affidavit Hash (keccak256):", bold=True)
-    draw_line(affidavit["affidavit_hash"])
-
-    y -= 2 * mm
-    draw_line("Registrar Address:", bold=True)
-    draw_line(affidavit["registrar_address"])
-
-    y -= 4 * mm
-    draw_line("Digital Signature:", bold=True)
-
-    digital_sig = affidavit.get(
-        "digital_signature",
-        "UNSIGNED – REGISTRAR DIGITAL SIGNATURE NOT APPLIED",
-    )
-
-    y = draw_paragraph(
-        c,
-        digital_sig,
-        25 * mm,
-        y,
-        160 * mm,
-        font_size=8,
-        leading=12,
-    )
-
-    draw_line(
-        "Signature Algorithm: secp256k1 (Ethereum ECDSA)",
-        bold=True,
-    )
 
     # ---------------- QR (FAIL-SAFE) ----------------
 
