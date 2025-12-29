@@ -18,10 +18,6 @@ class SubdivideRequest(BaseModel):
         ...,
         description="Hex hash of the parent record (0x...)"
     )
-    owner_address: str = Field(
-        ...,
-        description="Owner address (must match parent owner)"
-    )
     children: List[SubdivisionChild] = Field(
         ...,
         description="List of subdivision child parcels"

@@ -1,13 +1,25 @@
 from web3 import Web3
 
-def generate_proof(tree, index):
+
+def generate_proof(tree: list[list[bytes]], index: int) -> list[bytes]:
+    """
+    Generate Merkle inclusion proof for leaf at `index`.
+    """
+
+    if index < 0 or index >= len(tree[0]):
+        raise IndexError("Leaf index out of range")
+
     proof = []
+    idx = index
+
     for level in tree[:-1]:
-        sibling_index = index ^ 1
+        sibling_index = idx ^ 1
         if sibling_index < len(level):
             proof.append(level[sibling_index])
-        index //= 2
+        idx //= 2
+
     return proof
+
 
 def verify_proof(
     leaf: bytes,
@@ -27,6 +39,7 @@ def verify_proof(
 
     return computed == expected_root, computed
 
+
 def verify_proof_with_trace(
     leaf: bytes,
     proof: list[bytes],
@@ -37,18 +50,16 @@ def verify_proof_with_trace(
     idx = index
     trace = []
 
-    for i, sibling in enumerate(proof):
+    for step, sibling in enumerate(proof):
         if idx % 2 == 0:
-            left = computed
-            right = sibling
+            left, right = computed, sibling
         else:
-            left = sibling
-            right = computed
+            left, right = sibling, computed
 
         next_hash = Web3.keccak(left + right)
 
         trace.append({
-            "step": i,
+            "step": step,
             "index": idx,
             "left": Web3.to_hex(left),
             "right": Web3.to_hex(right),

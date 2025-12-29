@@ -39,8 +39,7 @@ router = APIRouter(tags=["registry"])
 @router.post("/create", response_model=CreateRecordResponse)
 def create_record(
     req: CreateRecordRequest,
-    db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    db: Session = Depends(get_db)
 ):
 
     print("\n================ CREATE RECORD =================")
@@ -108,8 +107,7 @@ def create_record(
 @router.post("/transfer")
 def transfer_record(
     req: TransferRecordRequest,
-    db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    db: Session = Depends(get_db)
 ):
 
     old_record = db.query(PropertyRecord).filter(
@@ -210,8 +208,9 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
     except Exception:
         ipfs_exists = False
 
-    owner, cid, timestamp, registrar, registrar_sig, parent_hash = \
-        get_record_from_chain(record_hash)
+    owner, cid, timestamp, registrar, registrar_sig, parent_hash, is_transferable = \
+    get_record_from_chain(record_hash)
+
 
     blockchain_exists = timestamp != 0
     owner_match = owner.lower() == db_record.owner_address.lower()
@@ -400,6 +399,8 @@ def list_records(
                     "0x" + r.parent_record.hex()
                     if r.parent_record else None
                 ),
+                "parcel_type": r.parcel_type,
+                "is_transferable": r.is_transferable,
                 "created_at": r.created_at,
             }
             for r in records

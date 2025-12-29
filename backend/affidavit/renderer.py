@@ -75,11 +75,13 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
 
     # ---------------- HEADER ----------------
     draw_line("BLOCKCHAIN LAND REGISTRY", "Helvetica-Bold", 16)
-    draw_line("Merkle Inclusion Affidavit", "Helvetica-Bold", 14)
+    draw_line("Merkle Inclusion & GIS Verification Affidavit", "Helvetica-Bold", 14)
 
     y -= 6 * mm
+    draw_line(f"Schema Version: {affidavit.get('schema_version', 'N/A')}")
     draw_line(f"Network: {affidavit['network']}")
     draw_line(f"Generated At: {affidavit['generated_at']}")
+
 
     # ---------------- A. PROPERTY RECORD ----------------
     y -= 6 * mm
@@ -98,7 +100,7 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
 
     geometry = affidavit.get("geometry", {})
 
-    draw_line(f"Area (m²): {geometry.get('area_m2')}")
+    draw_line(f"Geodesic Area (m²): {geometry.get('area_m2')}")
     draw_line(f"Subdivision Status: {'YES' if geometry.get('is_subdivided') else 'NO'}")
 
     metadata = affidavit.get("metadata", {})
@@ -109,7 +111,7 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
 
     # ---------------- C. GEOMETRY & BOUNDARIES ----------------
     y -= 6 * mm
-    draw_line("C. Geometry & Boundaries", "Helvetica-Bold", 12)
+    draw_line("C. Geometry & Boundaries (WGS84)", "Helvetica-Bold", 12)
 
     polygon = geometry.get("polygon")
     bbox = geometry.get("bbox")
@@ -125,20 +127,31 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
         draw_line(f"  Min Lon: {bbox['min_lon']} | Min Lat: {bbox['min_lat']}")
         draw_line(f"  Max Lon: {bbox['max_lon']} | Max Lat: {bbox['max_lat']}")
 
+
+    # ---------------- C.1 GIS AREA AUDIT (FIXED) ----------------
+    gis = affidavit.get("gis_audit")
+
+    if gis and isinstance(gis, dict):
+        y -= 6 * mm
+        draw_line("C.1 GIS Area Audit", "Helvetica-Bold", 12)
+        for k, v in gis.items():
+            draw_line(f"{k}: {v}")
+
+
     # ---------------- D. MERKLE PROOF ----------------
     y -= 6 * mm
-    draw_line("D. Merkle Proof", "Helvetica-Bold", 12)
+    draw_line("D. Merkle Inclusion Proof", "Helvetica-Bold", 12)
 
     mp = affidavit["merkle_proof"]
-    draw_line(f"Leaf: {mp['leaf']}")
-    draw_line(f"Index: {mp['index']}")
-    draw_line("Proof:")
+    draw_line(f"Leaf Hash: {mp['leaf']}")
+    draw_line(f"Leaf Index: {mp['index']}")
+    draw_line("Merkle Proof Nodes:")
     for p in mp["proof"]:
         draw_line(f"  - {p}")
 
     # ---------------- E. ANCHORING ----------------
     y -= 6 * mm
-    draw_line("E. Anchoring", "Helvetica-Bold", 12)
+    draw_line("E. Blockchain Anchoring", "Helvetica-Bold", 12)
 
     a = affidavit["anchoring"]
     draw_line(f"Merkle Root: {a['root']}")
@@ -146,18 +159,22 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
     draw_line(f"Block Number: {a['block_number']}")
     draw_line(f"Anchored At: {a['anchored_at']}")
 
+    if "chain_id" in a:
+        draw_line(f"Chain ID: {a['chain_id']}")
+
+
     ensure_space(3)
     draw_line("View on Ethereum Explorer:")
 
     c.setFillColor(blue)
-    display_url = f"{settings.ETH_EXPLORER_BASE}/tx/…"
+    display_url = f"{settings.ETH_EXPLORER_BASE}/tx/{a['tx_hash']}"
     text_x = 25 * mm
     text_y = y
     c.drawString(text_x, text_y, display_url)
 
     text_width = c.stringWidth(display_url, "Helvetica", 10)
     c.linkURL(
-        f"{settings.ETH_EXPLORER_BASE}/tx/{a['tx_hash']}",
+        display_url,
         rect=(text_x, text_y - 2, text_x + text_width, text_y + 10),
         relative=0,
     )
@@ -170,27 +187,84 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
 
     v = affidavit["verification"]
 
-    draw_line("Verification Status: PASSED" if v["valid"] else "Verification Status: FAILED")
+    draw_line(
+        "Verification Status: PASSED" if v["valid"] else "Verification Status: FAILED"
+    )
     draw_line(f"Hash Function Used: {v['hash_function']}")
-
+    
     y = draw_paragraph(
         c,
         (
-            "All cryptographic checks were successfully verified at the time "
-            "this affidavit was generated. Independent re-verification can be "
-            "performed using the Merkle proof, anchored root, transaction hash, "
-            "and digital signature provided in this document."
+            "All cryptographic checks were successfully verified at the time this "
+            "affidavit was generated. Independent re-verification may be performed "
+            "using the Merkle inclusion proof, anchored Merkle root, blockchain "
+            "transaction hash, and the digital signature referenced herein."
         ),
         25 * mm,
         y,
         160 * mm,
-        font="Helvetica",
+        font="Helvetica-Bold",
         font_size=10,
         leading=14,
     )
 
+    y = draw_paragraph(
+        c,
+        (
+            "Geospatial integrity is enforced using geodesic area computation on "
+            "authoritative WGS84 coordinate geometry. During subdivision operations, "
+            "the registry enforces strict conservation of land area such that the "
+            "sum of all child parcel areas remains within a tolerance of not less "
+            "than ninety-nine percent (≥99%) of the parent parcel area."
+        ),
+        25 * mm,
+        y,
+        160 * mm,
+        font="Helvetica-Bold",
+        font_size=10,
+        leading=14,
+    )
+
+    y = draw_paragraph(
+        c,
+        (
+            "Any minor residual parcels arising due to geospatial projection limits, "
+            "numerical precision, or boundary alignment are automatically preserved "
+            "as non-transferable residual records. Such residual land remains "
+            "cryptographically anchored, auditable, and legally attributable to the "
+            "original parent parcel, and does not constitute loss, dilution, or "
+            "extinguishment of ownership or title."
+        ),
+        25 * mm,
+        y,
+        160 * mm,
+        font="Helvetica-Bold",
+        font_size=10,
+        leading=14,
+    )
+
+    y = draw_paragraph(
+        c,
+        (
+            "All subdivision actions are deterministically replay-verifiable, "
+            "cryptographically anchored, and auditable through registry records, "
+            "Merkle proofs, blockchain anchors, and geospatial appendices, ensuring "
+            "full transparency and court-admissible traceability."
+        ),
+        25 * mm,
+        y,
+        160 * mm,
+        font="Helvetica-Bold",
+        font_size=10,
+        leading=14,
+    )
+
+    y -= 4 * mm
+
     # ---------------- G. AFFIRMATION ----------------
     draw_line("G. Affirmation", "Helvetica-Bold", 12)
+    
+    y -= 2 * mm
 
     y = draw_paragraph(
         c,
@@ -199,7 +273,7 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
         y,
         160 * mm,
         font="Helvetica-Bold",
-        font_size=10.5,
+        font_size=10,
         leading=14,
     )
 
@@ -207,44 +281,55 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
     y -= 6 * mm
     draw_line("H. Registrar Signature", "Helvetica-Bold", 12)
 
+    c.setFont("Helvetica", 12)
+    y -= 4 * mm
+
+    draw_line("Registrar Signature : ", "Helvetica", 12)
+
     signature_path = Path("assets/signature.jpeg")
     if signature_path.exists():
         c.drawImage(
             str(signature_path),
-            60 * mm,
-            y - 13,
+            70 * mm,
+            y + 1,
             width=50 * mm,
             height=15 * mm,
             mask="auto",
         )
 
-    y -= 14 * mm
+    y -= 5 * mm
     draw_line(f"Date: {datetime.now().strftime('%d-%m-%Y')}")
     draw_line(f"Time: {datetime.now().strftime('%I:%M:%S %p')}")
 
     # ---------------- I. CRYPTOGRAPHIC ATTESTATION ----------------
-    y -= 6 * mm
+    y -= 15 * mm
     draw_line("I. Cryptographic Attestation", "Helvetica-Bold", 12)
+    
+    y -= 2 * mm
 
-    draw_line("Affidavit Hash (keccak256):")
+    draw_line("Affidavit Hash (keccak256):","Helvetica-Bold", 10)
     draw_line(affidavit["affidavit_hash"])
 
-    draw_line("Registrar Address:")
+    y -= 2 * mm
+
+    draw_line("Registrar Address:","Helvetica-Bold", 10)
     draw_line(affidavit["signature"]["signer"])
 
-    draw_line("Digital Signature:")
+    y -= 2 * mm
+
+    draw_line("Digital Signature:","Helvetica-Bold", 10)
+
     y = draw_paragraph(
         c,
         affidavit["signature"]["signature"],
         25 * mm,
-        y,
+        y + 15,
         160 * mm,
-        font="Helvetica",
         font_size=7,
         leading=12,
     )
 
-    draw_line("Signature Algorithm: secp256k1 (Ethereum ECDSA)")
+    draw_line("Signature Algorithm: secp256k1 (Ethereum ECDSA)","Helvetica-Bold", 10)
 
     # ---------------- J. QR ----------------
     ensure_space(8)
@@ -253,3 +338,5 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
 
     c.setFont("Helvetica", 8)
     c.drawString(150 * mm, 22 * mm, "Offline-verifiable affidavit QR")
+
+    c.save()

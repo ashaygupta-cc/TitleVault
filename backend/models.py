@@ -6,15 +6,15 @@ from sqlalchemy import (
     LargeBinary,
     Text,
     ForeignKey,
+    Boolean,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine, Boolean
+from sqlalchemy import create_engine
 from geoalchemy2 import Geometry
 import uuid
-from datetime import datetime
 
 from config import settings
 
@@ -78,12 +78,11 @@ class RefreshToken(Base):
     )
 
     token = Column(Text, nullable=False)
-
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
 
 # ------------------------------------------
-# PROPERTY RECORD MODEL
+# PROPERTY RECORD MODEL (CORE LEGAL OBJECT)
 # ------------------------------------------
 class PropertyRecord(Base):
     __tablename__ = "property_records"
@@ -95,11 +94,17 @@ class PropertyRecord(Base):
     )
 
     # Immutable canonical hash (bytes32)
-    record_hash = Column(LargeBinary, unique=True, nullable=False)
+    record_hash = Column(LargeBinary(32), unique=True, nullable=False)
 
-    # Optional explicit canonical hash (future-proofing)
-    canonical_hash = Column(LargeBinary, nullable=True)
-    subdivision_locked = Column(Boolean, server_default="false")
+    # Explicit canonical hash (future-proofing / migration-safe)
+    canonical_hash = Column(LargeBinary(32), nullable=True)
+
+    # Prevent double subdivision
+    subdivision_locked = Column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+    )
 
     # LEGACY | CANONICAL
     format = Column(
@@ -108,24 +113,43 @@ class PropertyRecord(Base):
         server_default=text("'LEGACY'"),
     )
 
-    # IPFS CID
+    # IPFS CID (canonical JSON bytes)
     cid = Column(Text, nullable=False)
 
     owner_address = Column(String, nullable=True)
 
-    # Previous record hash (for transfers)
-    parent_record = Column(LargeBinary, nullable=True)
+    # Parent record hash (for subdivision / transfer lineage)
+    parent_record = Column(LargeBinary(32), nullable=True)
 
-    # Canonical JSON (sorted, stable)
+    # Canonical JSON (sorted, deterministic)
     canonical_json = Column(JSONB, nullable=False)
 
-    # PostGIS polygon
+    # PostGIS geometry (authoritative boundary)
     geom = Column(
         Geometry(geometry_type="POLYGON", srid=4326),
         nullable=True,
     )
 
+    # Geodesic area in square meters
     area_m2 = Column(Numeric, nullable=True)
+
+    # -----------------------------
+    # LEGAL EXTENSIONS (IMPORTANT)
+    # -----------------------------
+
+    # PRIMARY | SUBDIVISION | RESIDUAL
+    parcel_type = Column(
+        String,
+        nullable=False,
+        server_default=text("'PRIMARY'"),
+    )
+
+    # Whether this parcel can be transferred independently
+    is_transferable = Column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )
 
     created_at = Column(
         DateTime(timezone=True),
@@ -133,7 +157,10 @@ class PropertyRecord(Base):
         nullable=False,
     )
 
+
+# ------------------------------------------
 # MERKLE SNAPSHOT MODEL
+# ------------------------------------------
 class MerkleSnapshot(Base):
     __tablename__ = "merkle_snapshots"
 
@@ -159,11 +186,27 @@ class MerkleSnapshot(Base):
     )
 
 
+# ------------------------------------------
+# AUDIT LOG MODEL (RENAMED SAFELY)
+# ------------------------------------------
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True)
-    action = Column(String)
-    record_hash = Column(LargeBinary)
-    metadata = Column(JSONB)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+
+    action = Column(String, nullable=False)
+
+    record_hash = Column(LargeBinary(32), nullable=True)
+
+    # ⚠️ DO NOT name this `metadata` (reserved by SQLAlchemy)
+    metadata_json = Column(JSONB, nullable=True)
+
+    timestamp = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

@@ -57,6 +57,13 @@
 - Institutional-grade audit transparency and compliance
 - Separation of concerns for affidavit generation and verification
 
+### Spatial Integrity & Evidence Finalization
+- GIS-based spatial conservation verification and audit enforcement
+- Subdivision validity checking with Merkle closure verification
+- Map-ready geometry processing with standardized bounding boxes
+- Court-grade evidence completion with comprehensive audit trails
+- Production-ready verification pipeline with null-safe enforcement
+
 ## Testing Strategy
 - Unit tests for individual components
 - Integration tests for API endpoints

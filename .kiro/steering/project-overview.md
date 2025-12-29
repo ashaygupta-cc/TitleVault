@@ -92,6 +92,20 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: This phase establishes complete public transparency and institutional-grade verification capabilities.
 
+### Phase 8: Spatial Closure, Subdivision Finalization & Evidence Completion
+- GIS appendix & parcel audit enforcement APIs
+- Spatial conservation verification (≥99% area rule)
+- Subdivision validity & Merkle closure verification routes
+- Map-ready parcel geometry & bounding box endpoints
+- Subdivision-aware Merkle inspection utilities
+- Affidavit schema finalization (schema version + chain ID)
+- Court-grade PDF affidavit updates with GIS audit section
+- Offline-verifiable QR payload standardization
+- Registry list safety & summary hardening
+- Verification pipeline fixes & null-safe enforcement
+
+**Status**: This phase completes spatial integrity enforcement and evidence finalization for production readiness.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry

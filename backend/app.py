@@ -5,8 +5,13 @@ from routes.auth_routes import router as auth_router
 from routes.registry_routes import router as registry_router
 from routes.health_routes import router as health_router
 from routes.merkle_routes import router as merkle_router
+from routes.subdivision_merkle_routes import router as subdivision_merkle_router
 from routes.affidavit_routes import router as affidavit_router
 from routes.subdivision_routes import router as subdivision_router
+from routes.gis_audit_routes import router as gis_audit_router
+from routes.map_routes import router as map_router
+from routes.subdivision_replay_routes import router as subdivision_replay_router
+from routes.gis_appendix_routes import router as gis_appendix_router
 
 from models import Base, engine
 from indexer.registry_indexer import sync_from_chain   
@@ -29,10 +34,16 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(registry_router, prefix="/registry", tags=["Registry"])
-app.include_router(subdivision_router)
+app.include_router(subdivision_router,prefix="/registry", tags=["Subdivision"])
 app.include_router(merkle_router, prefix="/merkle", tags=["Merkle"])
+app.include_router(subdivision_merkle_router, prefix="/subdivision", tags=["Subdivision Merkle"])
 app.include_router(affidavit_router, prefix="/affidavit", tags=["Affidavit"])
 app.include_router(health_router, prefix="/health", tags=["System"])
+app.include_router(gis_audit_router, prefix="/audit", tags=["GIS Audit"])
+app.include_router(map_router,prefix="/map", tags=["Map"])
+app.include_router(subdivision_replay_router,prefix="/verify", tags=["Subdivision Replay"])
+app.include_router(gis_appendix_router,prefix="/appendix", tags=["Court GIS Appendix"])
+
 
 @app.on_event("startup")
 async def startup():

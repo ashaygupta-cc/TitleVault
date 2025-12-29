@@ -250,10 +250,10 @@ def send_subdivide_record_tx(
     parent_bytes = to_bytes32(parent_hash_hex)
     child_bytes = to_bytes32(child_hash_hex)
 
-    nonce = w3.eth.get_transaction_count(REGISTRAR_ADDRESS)
+    nonce = w3.eth.get_transaction_count(REGISTRAR_ADDRESS, "pending")
     block = w3.eth.get_block("latest")
     base_fee = block["baseFeePerGas"]
-    priority = w3.to_wei(2, "gwei")
+    priority = w3.to_wei(3, "gwei")
 
     tx = contract.functions.subdivideRecord(
         parent_bytes,
@@ -271,7 +271,7 @@ def send_subdivide_record_tx(
     })
 
     signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
 
     print("🚀 Subdivision TX:", w3.to_hex(tx_hash))
     return w3.to_hex(tx_hash)

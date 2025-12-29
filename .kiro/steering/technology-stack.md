@@ -40,6 +40,8 @@
 - **shapely**: Geometric operations and spatial analysis
 - **geojson**: GeoJSON format handling
 - **pyproj**: Coordinate system transformations
+- **geopandas**: Advanced geospatial data analysis
+- **rtree**: Spatial indexing for efficient queries
 
 ## Frontend Technologies (Future Phases)
 - **React**: UI framework

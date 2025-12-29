@@ -1,74 +1,62 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from web3 import Web3
+from datetime import datetime, timezone
+from pathlib import Path
+from fastapi.responses import FileResponse
 
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from eth_keys.exceptions import BadSignature
 
-from sqlalchemy import desc
-from datetime import datetime, timezone
-
+from models import get_db, PropertyRecord, MerkleSnapshot
 
 from affidavit.renderer import render_affidavit_pdf
 from affidavit.hash import compute_affidavit_hash
 from affidavit.signature import sign_affidavit_hash
-from schemas.affidavit_schema import VerifyAffidavitSignatureRequest,VerifyFullRequest
+from schemas.affidavit_schema import (
+    VerifyAffidavitSignatureRequest,
+    VerifyFullRequest,
+)
 
 from merkle.utils import (
     build_merkle_tree,
     get_merkle_root,
     generate_proof,
-    merkle_leaf_hash
+    merkle_leaf_hash,
 )
-from fastapi.responses import FileResponse
-from pathlib import Path
+from merkle.proof import verify_proof
 
+from geoalchemy2.shape import to_shape
+from utils.area import geodesic_area_m2
 
 router = APIRouter(tags=["Affidavit"])
 
-
+# =========================================================
+# SIMPLE VERIFY (ANCHOR PRESENCE ONLY)
+# =========================================================
 @router.get("/verify")
 def verify_affidavit_by_hash(
     record_hash: str = Query(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    print("\n================ AFFIDAVIT VERIFY START ================")
-
-    clean = record_hash.strip()
-    if clean.startswith("0x"):
-        clean = clean[2:]
-
+    clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
     if len(clean) != 64:
-        raise HTTPException(400, "Invalid record_hash length")
+        raise HTTPException(400, "Invalid record_hash")
 
-    record_hash_bytes = bytes.fromhex(clean)
-
-    record = (
-        db.query(PropertyRecord)
-        .filter(
-            PropertyRecord.record_hash == record_hash_bytes,
-            PropertyRecord.format == "CANONICAL"
-        )
-        .first()
-    )
+    record = db.query(PropertyRecord).filter(
+        PropertyRecord.record_hash == bytes.fromhex(clean)
+    ).first()
 
     if not record:
         return {"verified": False, "reason": "Record not found"}
-
-    if record.subdivision_locked:
-        return {
-            "verified": False,
-            "reason": "Record has been subdivided",
-            "status": "SUBDIVIDED_PARENT"
-        }
 
     snapshot = (
         db.query(MerkleSnapshot)
         .order_by(MerkleSnapshot.anchored_at.desc())
         .first()
     )
-
     if not snapshot:
         return {"verified": False, "reason": "No anchored Merkle root"}
 
@@ -80,20 +68,19 @@ def verify_affidavit_by_hash(
     }
 
 
-
+# =========================================================
+# AFFIDAVIT GENERATION (JSON)
+# =========================================================
 @router.get("/{record_hash}")
 def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
     clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
-
-    try:
-        record_hash_bytes = bytes.fromhex(clean)
-    except ValueError:
+    if len(clean) != 64:
         raise HTTPException(400, "Invalid record_hash")
 
     record = (
         db.query(PropertyRecord)
         .filter(
-            PropertyRecord.record_hash == record_hash_bytes,
+            PropertyRecord.record_hash == bytes.fromhex(clean),
             PropertyRecord.format == "CANONICAL",
         )
         .first()
@@ -109,7 +96,7 @@ def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
     if not snapshot:
         raise HTTPException(400, "No anchored Merkle snapshot")
 
-    # ---- rebuild Merkle tree (canonical ordering)
+    # ---------- MERKLE TREE ----------
     records = (
         db.query(PropertyRecord)
         .filter(PropertyRecord.format == "CANONICAL")
@@ -127,7 +114,7 @@ def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
             r.parent_record,
         )
         leaves.append(leaf)
-        if r.record_hash == record_hash_bytes:
+        if r.record_hash == record.record_hash:
             index = i
 
     if index is None:
@@ -137,7 +124,7 @@ def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
     root = get_merkle_root(tree)
 
     if root != snapshot.root:
-        raise HTTPException(409, "Merkle root mismatch with anchored snapshot")
+        raise HTTPException(409, "Merkle root mismatch")
 
     proof = generate_proof(tree, index)
 
@@ -148,10 +135,56 @@ def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
         expected_root=snapshot.root,
     )
     if not ok:
-        raise HTTPException(500, "Internal Merkle verification failed")
+        raise HTTPException(500, "Merkle verification failed")
 
-    # ---- build affidavit (UNSIGNED)
+    # ---------- GIS AUDIT ----------
+    gis_block = None
+
+    if record.geom:
+        parent_geom = to_shape(record.geom)
+        parent_area = float(record.area_m2 or geodesic_area_m2(parent_geom))
+
+        children = (
+            db.query(PropertyRecord)
+            .filter(PropertyRecord.parent_record == record.record_hash)
+            .all()
+        )
+
+        children_area_sum = 0.0
+        residual_area = 0.0
+        children_data = []
+
+        for c in children:
+            if not c.geom:
+                continue
+
+            area = float(c.area_m2)
+            children_area_sum += area
+
+            if c.parcel_type == "RESIDUAL":
+                residual_area += area
+
+            children_data.append({
+                "record_hash": Web3.to_hex(c.record_hash),
+                "area_m2": area,
+                "parcel_type": c.parcel_type,
+                "is_transferable": c.is_transferable,
+            })
+
+        gis_block = {
+            "parent_area_m2": parent_area,
+            "children_area_sum_m2": children_area_sum,
+            "residual_area_m2": residual_area,
+            "conservation_ratio": round(children_area_sum / parent_area, 6),
+            "tolerance_policy": "≥99%",
+            "children": children_data,
+        }
+
+    # ---------- AFFIDAVIT ----------
     affidavit = {
+        # ✅ ADDED (1)
+        "schema_version": "1.0.0",
+
         "system": "Blockchain Land Registry",
         "network": "Ethereum Sepolia",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -167,10 +200,32 @@ def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
             ),
         },
 
+        "geometry": {
+            "area_m2": float(record.area_m2) if record.area_m2 else None,
+            "is_subdivided": record.subdivision_locked,
+            "parcel_type": record.parcel_type,
+            "is_transferable": record.is_transferable,
+        },
+
+        "gis_audit": gis_block or {
+            "note": (
+                "No subdivision GIS audit applicable for this record "
+                "at time of affidavit generation."
+            )
+        },
+
         "merkle_proof": {
             "leaf": Web3.to_hex(leaves[index]),
             "index": index,
+
+            # ⚠️ UNCHANGED (for compatibility)
             "proof": [Web3.to_hex(p) for p in proof],
+
+            # ✅ ADDED (2) — portable metadata
+            "proof_direction": [
+                "left" if ((index >> i) & 1) else "right"
+                for i in range(len(proof))
+            ],
         },
 
         "anchoring": {
@@ -178,6 +233,9 @@ def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
             "tx_hash": snapshot.tx_hash,
             "block_number": snapshot.block_number,
             "anchored_at": snapshot.anchored_at.isoformat(),
+
+            # ✅ ADDED (3)
+            "chain_id": 11155111,
         },
 
         "verification": {
@@ -187,22 +245,22 @@ def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
 
         "affirmation": (
             "I affirm that the above Merkle inclusion proof was generated "
-            "automatically from the canonical registry state and "
-            "cryptographically verifies inclusion of the record in the "
-            "anchored Merkle root on Ethereum."
+            "from canonical registry state and cryptographically verifies "
+            "inclusion of the record in the anchored Merkle root."
         ),
     }
 
-    # ---- Phase 3 (CORRECT): hash + sign
     affidavit_hash = compute_affidavit_hash(affidavit)
-    signature = sign_affidavit_hash(affidavit_hash)
-
     affidavit["affidavit_hash"] = affidavit_hash
-    affidavit["signature"] = signature
+    affidavit["signature"] = sign_affidavit_hash(affidavit_hash)
 
     return affidavit
 
 
+
+# =========================================================
+# PDF
+# =========================================================
 @router.get("/{record_hash}/pdf")
 def download_affidavit_pdf(record_hash: str, db: Session = Depends(get_db)):
     affidavit = generate_affidavit(record_hash, db)
@@ -210,18 +268,19 @@ def download_affidavit_pdf(record_hash: str, db: Session = Depends(get_db)):
     tmp_dir = Path(__file__).resolve().parent.parent / "tmp"
     tmp_dir.mkdir(exist_ok=True)
 
-    safe = record_hash.replace("0x", "")
-    pdf_path = tmp_dir / f"affidavit_{safe}.pdf"
-
+    pdf_path = tmp_dir / f"affidavit_{record_hash.replace('0x','')}.pdf"
     render_affidavit_pdf(affidavit, str(pdf_path))
 
     return FileResponse(
-        path=str(pdf_path),
+        str(pdf_path),
         media_type="application/pdf",
         filename="land_registry_affidavit.pdf",
     )
 
 
+# =========================================================
+# SIGNATURE VERIFY
+# =========================================================
 @router.post("/verify-signature")
 def verify_affidavit_signature(req: VerifyAffidavitSignatureRequest):
     msg_hash = Web3.solidity_keccak(
@@ -288,20 +347,13 @@ def verify_full_affidavit(
     print("🗄️ Querying DB for canonical record...")
 
     record = (
-        db.query(PropertyRecord)
-        .filter(
-            PropertyRecord.record_hash == record_hash_bytes,
-            PropertyRecord.format == "CANONICAL"
-        )
-        .first()
+    db.query(PropertyRecord)
+    .filter(
+        PropertyRecord.record_hash == record_hash_bytes,
+        PropertyRecord.format == "CANONICAL"
     )
-
-    if record.subdivision_locked:
-        return {
-            "verified": False,
-            "reason": "Record has been subdivided",
-            "status": "SUBDIVIDED_PARENT"
-        }
+    .first()
+    )
 
     if not record:
         print("❌ Record NOT FOUND or NOT CANONICAL")
@@ -310,6 +362,14 @@ def verify_full_affidavit(
             "verified": False,
             "checks": {"record_exists": False}
         }
+
+    if record.subdivision_locked:
+        return {
+            "verified": False,
+            "reason": "Record has been subdivided",
+            "status": "SUBDIVIDED_PARENT"
+        }
+
 
     print("✅ Record FOUND")
     print("   • record_hash     :", record.record_hash.hex())
