@@ -235,3 +235,43 @@ def get_registry_root_contract():
     if registry_root_contract is None:
         raise RuntimeError("RegistryRootAnchor contract not initialized")
     return registry_root_contract
+
+
+
+def send_subdivide_record_tx(
+    parent_hash_hex,
+    child_hash_hex,
+    cid,
+    owner_addr,
+    registrar_sig=b"",
+):
+    print("\n================ SUBDIVIDE TX =================")
+
+    parent_bytes = to_bytes32(parent_hash_hex)
+    child_bytes = to_bytes32(child_hash_hex)
+
+    nonce = w3.eth.get_transaction_count(REGISTRAR_ADDRESS)
+    block = w3.eth.get_block("latest")
+    base_fee = block["baseFeePerGas"]
+    priority = w3.to_wei(2, "gwei")
+
+    tx = contract.functions.subdivideRecord(
+        parent_bytes,
+        child_bytes,
+        cid,
+        Web3.to_checksum_address(owner_addr),
+        registrar_sig,
+    ).build_transaction({
+        "from": REGISTRAR_ADDRESS,
+        "nonce": nonce,
+        "gas": 700000,
+        "maxFeePerGas": base_fee * 2 + priority,
+        "maxPriorityFeePerGas": priority,
+        "chainId": w3.eth.chain_id,
+    })
+
+    signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
+    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+
+    print("🚀 Subdivision TX:", w3.to_hex(tx_hash))
+    return w3.to_hex(tx_hash)

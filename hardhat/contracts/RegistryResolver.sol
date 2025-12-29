@@ -12,14 +12,14 @@ contract RegistryResolver is AccessControl {
         uint256 timestamp;
         address registrar;
         bytes registrarSig;
-        bytes32 parentRecordHash; 
+        bytes32 parentRecordHash;
+        bool subdivided; // 🔒 NEW
     }
 
     mapping(bytes32 => Record) private _records;
 
-    // -------------------------
-    // EVENTS
-    // -------------------------
+    // ================= EVENTS =================
+
     event RecordCreated(
         bytes32 indexed recordHash,
         address indexed owner,
@@ -37,24 +37,31 @@ contract RegistryResolver is AccessControl {
         address registrar
     );
 
-    // -------------------------
-    // CONSTRUCTOR
-    // -------------------------
+    event RecordSubdivided(
+        bytes32 indexed parentRecordHash,
+        bytes32 indexed childRecordHash,
+        address indexed owner,
+        string cid,
+        uint256 timestamp,
+        address registrar
+    );
+
+    // ================= CONSTRUCTOR =================
+
     constructor(address initialRegistrar) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(REGISTRAR_ROLE, initialRegistrar);
     }
 
-    // -------------------------
-    // PHASE-2A: CREATE RECORD
-    // -------------------------
+    // ================= CREATE =================
+
     function createRecord(
         bytes32 recordHash,
         string calldata cid,
         address owner,
         bytes calldata registrarSig
     ) external onlyRole(REGISTRAR_ROLE) {
-        require(_records[recordHash].timestamp == 0, "Record already exists");
+        require(_records[recordHash].timestamp == 0, "Record exists");
 
         _records[recordHash] = Record({
             owner: owner,
@@ -62,7 +69,8 @@ contract RegistryResolver is AccessControl {
             timestamp: block.timestamp,
             registrar: msg.sender,
             registrarSig: registrarSig,
-            parentRecordHash: bytes32(0)
+            parentRecordHash: bytes32(0),
+            subdivided: false
         });
 
         emit RecordCreated(
@@ -74,9 +82,8 @@ contract RegistryResolver is AccessControl {
         );
     }
 
-    // -------------------------
-    // PHASE-2B: TRANSFER RECORD
-    // -------------------------
+    // ================= TRANSFER =================
+
     function transferRecord(
         bytes32 oldRecordHash,
         bytes32 newRecordHash,
@@ -86,8 +93,9 @@ contract RegistryResolver is AccessControl {
     ) external onlyRole(REGISTRAR_ROLE) {
         Record storage oldRecord = _records[oldRecordHash];
 
-        require(oldRecord.timestamp != 0, "Original record not found");
-        require(_records[newRecordHash].timestamp == 0, "New record already exists");
+        require(oldRecord.timestamp != 0, "Original not found");
+        require(!oldRecord.subdivided, "Parent subdivided");
+        require(_records[newRecordHash].timestamp == 0, "New exists");
 
         _records[newRecordHash] = Record({
             owner: newOwner,
@@ -95,7 +103,8 @@ contract RegistryResolver is AccessControl {
             timestamp: block.timestamp,
             registrar: msg.sender,
             registrarSig: registrarSig,
-            parentRecordHash: oldRecordHash
+            parentRecordHash: oldRecordHash,
+            subdivided: false
         });
 
         emit RecordTransferred(
@@ -108,9 +117,46 @@ contract RegistryResolver is AccessControl {
         );
     }
 
-    // -------------------------
-    // READ RECORD
-    // -------------------------
+    // ================= SUBDIVIDE =================
+
+    function subdivideRecord(
+        bytes32 parentRecordHash,
+        bytes32 childRecordHash,
+        string calldata cid,
+        address owner,
+        bytes calldata registrarSig
+    ) external onlyRole(REGISTRAR_ROLE) {
+        Record storage parent = _records[parentRecordHash];
+
+        require(parent.timestamp != 0, "Parent not found");
+        require(!parent.subdivided, "Already subdivided");
+        require(parent.owner == owner, "Owner mismatch");
+        require(_records[childRecordHash].timestamp == 0, "Child exists");
+
+        _records[childRecordHash] = Record({
+            owner: owner,
+            cid: cid,
+            timestamp: block.timestamp,
+            registrar: msg.sender,
+            registrarSig: registrarSig,
+            parentRecordHash: parentRecordHash,
+            subdivided: false
+        });
+
+        parent.subdivided = true;
+
+        emit RecordSubdivided(
+            parentRecordHash,
+            childRecordHash,
+            owner,
+            cid,
+            block.timestamp,
+            msg.sender
+        );
+    }
+
+    // ================= READ =================
+
     function getRecord(bytes32 recordHash)
         external
         view
@@ -120,7 +166,8 @@ contract RegistryResolver is AccessControl {
             uint256 timestamp,
             address registrar,
             bytes memory registrarSig,
-            bytes32 parentRecordHash
+            bytes32 parentRecordHash,
+            bool subdivided
         )
     {
         Record storage r = _records[recordHash];
@@ -130,7 +177,8 @@ contract RegistryResolver is AccessControl {
             r.timestamp,
             r.registrar,
             r.registrarSig,
-            r.parentRecordHash
+            r.parentRecordHash,
+            r.subdivided
         );
     }
 

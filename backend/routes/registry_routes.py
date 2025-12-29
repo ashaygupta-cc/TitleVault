@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+
 from shapely.geometry import Polygon as ShapelyPolygon
+from datetime import datetime
+
 import json
 from sqlalchemy import text
 from deps.auth import require_admin
@@ -23,15 +26,22 @@ from web3_client import (
     get_record_from_chain,
 )
 from utils.bytes32 import to_bytes32
+from utils.geometry import aggregate_child_polygons
 
 
 router = APIRouter(tags=["registry"])
+
+
 
 # ======================================================
 # POST /registry/create
 # ======================================================
 @router.post("/create", response_model=CreateRecordResponse)
-def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
+def create_record(
+    req: CreateRecordRequest,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin)
+):
 
     print("\n================ CREATE RECORD =================")
 
@@ -48,7 +58,6 @@ def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
         "polygon": coords,
     }
 
-    # 🔑 SINGLE SOURCE OF TRUTH
     canonical_bytes = canonicalize_to_bytes(record_json)
 
     record_hash_hex = compute_keccak256_from_bytes(canonical_bytes)
@@ -64,13 +73,13 @@ def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
     )
 
     new_record = PropertyRecord(
-    cid=cid,
-    record_hash=record_hash_bytes,
-    canonical_hash=record_hash_bytes,
-    format="CANONICAL",
-    owner_address=req.owner_address,
-    canonical_json=canonical_bytes.decode("utf-8"),
-    geom=f"SRID=4326;{geom_wkt}",
+        cid=cid,
+        record_hash=record_hash_bytes,
+        canonical_hash=record_hash_bytes,
+        format="CANONICAL",
+        owner_address=req.owner_address,
+        canonical_json=canonical_bytes.decode("utf-8"),
+        geom=f"SRID=4326;{geom_wkt}",
     )
 
     db.add(new_record)
@@ -97,7 +106,11 @@ def create_record(req: CreateRecordRequest, db: Session = Depends(get_db)):
 # POST /registry/transfer
 # ======================================================
 @router.post("/transfer")
-def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
+def transfer_record(
+    req: TransferRecordRequest,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin)
+):
 
     old_record = db.query(PropertyRecord).filter(
         PropertyRecord.record_hash == to_bytes32(req.old_record_hash)
@@ -105,6 +118,12 @@ def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
 
     if not old_record:
         raise HTTPException(status_code=404, detail="Original record not found")
+
+    if old_record.subdivision_locked:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot transfer subdivided parent record"
+        )
 
     old_data = json.loads(old_record.canonical_json)
 
@@ -130,17 +149,16 @@ def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
     )
 
     new_record = PropertyRecord(
-    cid=cid,
-    record_hash=new_hash_bytes,
-    canonical_hash=new_hash_bytes,    
-    format="CANONICAL",               
-    owner_address=req.new_owner_address,
-    canonical_json=canonical_bytes.decode("utf-8"),
-    geom=old_record.geom,
-    area_m2=old_record.area_m2,
-    parent_record=old_record.record_hash,
+        cid=cid,
+        record_hash=new_hash_bytes,
+        canonical_hash=new_hash_bytes,
+        format="CANONICAL",
+        owner_address=req.new_owner_address,
+        canonical_json=canonical_bytes.decode("utf-8"),
+        geom=old_record.geom,
+        area_m2=old_record.area_m2,
+        parent_record=old_record.record_hash,
     )
-
 
     db.add(new_record)
     db.commit()
@@ -154,23 +172,6 @@ def transfer_record(req: TransferRecordRequest, db: Session = Depends(get_db)):
     }
 
 # ======================================================
-# GET /registry/list
-# ======================================================
-@router.get("/list")
-def list_records(db: Session = Depends(get_db)):
-    return [
-        {
-            "id": str(r.id),
-            "cid": r.cid,
-            "record_hash": "0x" + r.record_hash.hex(),
-            "owner_address": r.owner_address,
-            "area_m2": r.area_m2,
-            "parent_record": "0x" + r.parent_record.hex() if r.parent_record else None,
-        }
-        for r in db.query(PropertyRecord).all()
-    ]
-
-# ======================================================
 # GET /registry/verify/{record_hash}
 # ======================================================
 @router.get("/verify/{record_hash}")
@@ -179,9 +180,8 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
     print("\n================ VERIFY RECORD =================")
 
     clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
-    record_hash_bytes = to_bytes32(record_hash)
+    record_hash_bytes = bytes.fromhex(clean)
 
-    # 1️⃣ DB LOOKUP
     db_record = db.query(PropertyRecord).filter(
         PropertyRecord.record_hash == record_hash_bytes
     ).first()
@@ -194,38 +194,39 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
             "ipfs_exists": False,
             "blockchain_exists": False,
         }
-    
-    print("🔎 canonical_hash:", db_record.canonical_hash.hex())
-    print("🔎 record_hash   :", db_record.record_hash.hex())
-    print("🔎 format        :", db_record.format)
-    # 2️⃣ IPFS FETCH (existence proof)
+
+    if db_record.subdivision_locked:
+        return {
+            "record_hash": "0x" + clean,
+            "status": "SUBDIVIDED_PARENT",
+            "db_exists": True,
+            "ipfs_exists": True,
+            "blockchain_exists": True,
+        }
+
     try:
-        raw_ipfs = fetch_raw_from_ipfs(db_record.cid)
+        fetch_raw_from_ipfs(db_record.cid)
         ipfs_exists = True
     except Exception:
-        raw_ipfs = None
         ipfs_exists = False
 
-    # 3️⃣ READ FROM BLOCKCHAIN
     owner, cid, timestamp, registrar, registrar_sig, parent_hash = \
         get_record_from_chain(record_hash)
 
     blockchain_exists = timestamp != 0
     owner_match = owner.lower() == db_record.owner_address.lower()
     cid_match = cid == db_record.cid
-    
+
     parent_match = (
-    (db_record.parent_record is None and parent_hash == b"\x00" * 32)
-    or (
-        db_record.parent_record is not None
-        and parent_hash == db_record.parent_record
-       )
+        (db_record.parent_record is None and parent_hash == b"\x00" * 32)
+        or (
+            db_record.parent_record is not None
+            and parent_hash == db_record.parent_record
+        )
     )
 
-    # 4️⃣ LEGACY DETECTION (UNCHANGED)
     is_legacy = db_record.format != "CANONICAL"
 
-    # 5️⃣ HASH VERIFICATION (FIXED SOURCE)
     if is_legacy:
         hash_match = None
     else:
@@ -234,32 +235,18 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
         db_hash_hex = "0x" + db_record.canonical_hash.hex()
         hash_match = (computed_hash == db_hash_hex)
 
-    # 6️⃣ FINAL STATUS (UNCHANGED SEMANTICS)
     if not blockchain_exists:
         status = "NOT_ON_CHAIN"
-
     elif not ipfs_exists:
         status = "INVALID_IPFS"
-
-    elif not owner_match:
+    elif not owner_match or not cid_match or not parent_match:
         status = "TAMPERED"
-
-    elif not cid_match:
-        status = "TAMPERED"
-
-    elif not parent_match:
-        status = "TAMPERED"
-
     elif is_legacy:
         status = "LEGACY"
-
     elif hash_match:
         status = "VERIFIED"
-
     else:
         status = "TAMPERED"
-
-    print("🏁 FINAL STATUS:", status)
 
     return {
         "record_hash": "0x" + clean,
@@ -273,6 +260,211 @@ def verify_record(record_hash: str, db: Session = Depends(get_db)):
         "owner_match": owner_match,
         "is_legacy": is_legacy,
     }
+
+# ======================================================
+# GET /registry/record/{record_hash}
+# ======================================================
+@router.get("/record/{record_hash}")
+def get_record_details(record_hash: str,db: Session = Depends(get_db)):
+
+
+    print("\n================ RECORD DETAILS =================")
+
+    clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
+
+    try:
+        record_hash_bytes = bytes.fromhex(clean)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid record_hash")
+
+    record = (
+        db.query(PropertyRecord)
+        .filter(PropertyRecord.record_hash == record_hash_bytes)
+        .first()
+    )
+
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    # ---- canonical source of truth
+    canonical = json.loads(record.canonical_json)
+
+    # ---- find children (for subdivision transparency)
+    children = (
+        db.query(PropertyRecord)
+        .filter(PropertyRecord.parent_record == record.record_hash)
+        .all()
+    )
+
+    print("📄 Record hash:", record.record_hash.hex())
+    print("🏷 Owner:", record.owner_address)
+    print("📐 Area (m²):", record.area_m2)
+    print("🔒 Subdivided:", record.subdivision_locked)
+    print("👶 Children count:", len(children))
+    print("=================================================\n")
+
+    # ---- geometry selection
+    if record.subdivision_locked and children:
+        polygon = aggregate_child_polygons(children)
+        geometry_source = "children_union"
+    else:
+        polygon = canonical.get("polygon")
+        geometry_source = "self"
+
+    # ---- bounding box
+    bbox = None
+    if polygon:
+        lons = [p[0] for p in polygon]
+        lats = [p[1] for p in polygon]
+        bbox = {
+            "min_lon": min(lons),
+            "min_lat": min(lats),
+            "max_lon": max(lons),
+            "max_lat": max(lats),
+        }
+
+    response = {
+        "record_hash": "0x" + record.record_hash.hex(),
+        "polygon": polygon,
+        "bbox": bbox,
+        "area_m2": record.area_m2,
+        "is_subdivided": record.subdivision_locked,
+        "parent_record": (
+            "0x" + record.parent_record.hex()
+            if record.parent_record else None
+        ),
+        "children_records": [
+            "0x" + c.record_hash.hex()
+            for c in children
+        ],
+        "geometry_source": geometry_source,
+    }
+
+    response.update({
+    "owner_address": record.owner_address,
+    "metadata": canonical.get("metadata"),
+    "cid": record.cid,
+    "created_at": record.created_at,
+    })
+
+
+    return response
+
+
+# ======================================================
+# GET /registry/list (PAGINATED)
+# ======================================================
+@router.get("/list")
+def list_records(
+    limit: int = 20,
+    cursor: str | None = None,
+    db: Session = Depends(get_db),
+):
+
+    print("\n================ REGISTRY LIST =================")
+    print("📥 limit:", limit)
+    print("📥 cursor:", cursor)
+
+    query = db.query(PropertyRecord).order_by(PropertyRecord.created_at.desc())
+
+    if cursor:
+        try:
+            cursor_dt = datetime.fromisoformat(cursor)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid cursor format. Use ISO-8601 datetime."
+            )
+
+        query = query.filter(PropertyRecord.created_at < cursor_dt)
+
+    records = query.limit(limit + 1).all()
+
+    next_cursor = None
+    if len(records) > limit:
+        next_cursor = records[-1].created_at.isoformat()
+        records = records[:-1]
+
+    print("📦 Records returned:", len(records))
+    print("➡️ next_cursor:", next_cursor)
+    print("================================================\n")
+
+    return {
+        "items": [
+            {
+                "record_hash": "0x" + r.record_hash.hex(),
+                "area_m2": r.area_m2,
+                "owner_address": r.owner_address,
+                "is_subdivided": r.subdivision_locked,
+                "parent_record": (
+                    "0x" + r.parent_record.hex()
+                    if r.parent_record else None
+                ),
+                "created_at": r.created_at,
+            }
+            for r in records
+        ],
+        "next_cursor": next_cursor,
+    }
+
+
+# ======================================================
+# GET /registry/children/{record_hash}
+# ======================================================
+@router.get("/children/{record_hash}")
+def get_children_records(record_hash: str, db: Session = Depends(get_db)):
+
+    print("\n================ REGISTRY CHILDREN =================")
+
+    clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
+
+    try:
+        parent_hash_bytes = bytes.fromhex(clean)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid record_hash")
+
+    children = (
+        db.query(PropertyRecord)
+        .filter(PropertyRecord.parent_record == parent_hash_bytes)
+        .all()
+    )
+
+    print("📄 Parent:", clean)
+    print("👶 Children found:", len(children))
+    print("===================================================\n")
+
+    results = []
+
+    for c in children:
+        canonical = json.loads(c.canonical_json)
+        polygon = canonical.get("polygon")
+
+        bbox = None
+        if polygon:
+            lons = [p[0] for p in polygon]
+            lats = [p[1] for p in polygon]
+            bbox = {
+                "min_lon": min(lons),
+                "min_lat": min(lats),
+                "max_lon": max(lons),
+                "max_lat": max(lats),
+            }
+
+        results.append({
+            "record_hash": "0x" + c.record_hash.hex(),
+            "polygon": polygon,
+            "bbox": bbox,
+            "area_m2": c.area_m2,
+            "is_subdivided": c.subdivision_locked,
+            "created_at": c.created_at,
+        })
+
+    return {
+        "parent_record": "0x" + clean,
+        "count": len(results),
+        "children": results,
+    }
+
 
 
 # ======================================================
@@ -297,6 +489,7 @@ def record_history(record_hash: str, db: Session = Depends(get_db)):
             "cid": current.cid,
             "area_m2": current.area_m2,
             "created_at": current.created_at,
+            "is_subdivided": current.subdivision_locked,
             "parent_record": (
                 "0x" + current.parent_record.hex()
                 if current.parent_record else None

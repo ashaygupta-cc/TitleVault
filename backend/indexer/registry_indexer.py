@@ -131,8 +131,8 @@ def handle_record_transferred(event, db: Session):
 # 🔄 FULL SYNC FROM CHAIN (PHASE 4C)
 # --------------------------------------------------
 START_BLOCK = settings.DEPLOYMENT_BLOCK
-STEP = 2000
-MAX_BLOCKS = 1300
+STEP = 1
+MAX_BLOCKS = 2000
 
 def sync_from_chain():
     print("🔄 Syncing Registry from blockchain...")
@@ -151,11 +151,11 @@ def sync_from_chain():
     transferred_event_abi = contract.events.RecordTransferred._get_event_abi()
 
     created_topic = Web3.keccak(
-        text="RecordCreated(bytes32,address,string,uint256)"
+    text="RecordCreated(bytes32,address,string,uint256,address)"
     ).hex()
 
     transferred_topic = Web3.keccak(
-        text="RecordTransferred(bytes32,bytes32,address,uint256)"
+    text="RecordTransferred(bytes32,bytes32,address,address,uint256,address)"
     ).hex()
 
     db: Session = SessionLocal()

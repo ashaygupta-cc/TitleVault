@@ -4,12 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.auth_routes import router as auth_router
 from routes.registry_routes import router as registry_router
 from routes.health_routes import router as health_router
+from routes.merkle_routes import router as merkle_router
+from routes.affidavit_routes import router as affidavit_router
+from routes.subdivision_routes import router as subdivision_router
 
 from models import Base, engine
 from indexer.registry_indexer import sync_from_chain   
 import asyncio
 from indexer.live_registry_listener import listen_registry_events
-from routes.merkle_routes import router as merkle_router
 
 
 app = FastAPI(
@@ -27,8 +29,10 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(registry_router, prefix="/registry", tags=["Registry"])
-app.include_router(health_router, prefix="/health", tags=["System"])
+app.include_router(subdivision_router)
 app.include_router(merkle_router, prefix="/merkle", tags=["Merkle"])
+app.include_router(affidavit_router, prefix="/affidavit", tags=["Affidavit"])
+app.include_router(health_router, prefix="/health", tags=["System"])
 
 @app.on_event("startup")
 async def startup():

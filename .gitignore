@@ -17,7 +17,7 @@ coverage/
 # ======================
 logs/
 *.log
-report.*.json
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # ======================
 # Environment variables
@@ -25,6 +25,10 @@ report.*.json
 .env
 .env.*
 !.env.example
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
 
 # ======================
 # Caches
@@ -49,3 +53,13 @@ backend/venv/
 # ======================
 .idea/
 .DS_Store
+
+# ======================
+# PDF Generation
+# ======================
+backend/tmp/*.pdf
+
+# Hardhat
+hardhat/cache/
+hardhat/artifacts
+

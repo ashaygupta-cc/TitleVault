@@ -1,3 +1,5 @@
+# affidavit/renderer.py
+
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
@@ -79,7 +81,7 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
     draw_line(f"Network: {affidavit['network']}")
     draw_line(f"Generated At: {affidavit['generated_at']}")
 
-    # ---------------- A. RECORD ----------------
+    # ---------------- A. PROPERTY RECORD ----------------
     y -= 6 * mm
     draw_line("A. Property Record", "Helvetica-Bold", 12)
 
@@ -90,21 +92,53 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
     draw_line(f"Parent Record: {rec['parent_record']}")
     draw_line(f"IPFS CID: {rec['cid']}")
 
-    # ---------------- B. MERKLE PROOF ----------------
+    # ---------------- B. PROPERTY DETAILS ----------------
     y -= 6 * mm
-    draw_line("B. Merkle Proof", "Helvetica-Bold", 12)
+    draw_line("B. Property Description", "Helvetica-Bold", 12)
+
+    geometry = affidavit.get("geometry", {})
+
+    draw_line(f"Area (m²): {geometry.get('area_m2')}")
+    draw_line(f"Subdivision Status: {'YES' if geometry.get('is_subdivided') else 'NO'}")
+
+    metadata = affidavit.get("metadata", {})
+    if metadata:
+        draw_line("Metadata:")
+        for k, v in metadata.items():
+            draw_line(f"  - {k}: {v}")
+
+    # ---------------- C. GEOMETRY & BOUNDARIES ----------------
+    y -= 6 * mm
+    draw_line("C. Geometry & Boundaries", "Helvetica-Bold", 12)
+
+    polygon = geometry.get("polygon")
+    bbox = geometry.get("bbox")
+
+    if polygon:
+        draw_line(f"Boundary Coordinates (count = {len(polygon)}):")
+        for i, (lon, lat) in enumerate(polygon):
+            draw_line(f"  {i+1}. Lon: {lon}, Lat: {lat}")
+
+    if bbox:
+        y -= 4 * mm
+        draw_line("Bounding Box:")
+        draw_line(f"  Min Lon: {bbox['min_lon']} | Min Lat: {bbox['min_lat']}")
+        draw_line(f"  Max Lon: {bbox['max_lon']} | Max Lat: {bbox['max_lat']}")
+
+    # ---------------- D. MERKLE PROOF ----------------
+    y -= 6 * mm
+    draw_line("D. Merkle Proof", "Helvetica-Bold", 12)
 
     mp = affidavit["merkle_proof"]
     draw_line(f"Leaf: {mp['leaf']}")
     draw_line(f"Index: {mp['index']}")
     draw_line("Proof:")
-
     for p in mp["proof"]:
         draw_line(f"  - {p}")
 
-    # ---------------- C. ANCHORING ----------------
+    # ---------------- E. ANCHORING ----------------
     y -= 6 * mm
-    draw_line("C. Anchoring", "Helvetica-Bold", 12)
+    draw_line("E. Anchoring", "Helvetica-Bold", 12)
 
     a = affidavit["anchoring"]
     draw_line(f"Merkle Root: {a['root']}")
@@ -131,19 +165,32 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
     c.setFillColor(black)
     y -= 14 * mm
 
-    # ---------------- D. VERIFICATION ----------------
-    draw_line("D. Verification", "Helvetica-Bold", 12)
+    # ---------------- F. VERIFICATION SUMMARY ----------------
+    draw_line("F. Verification Summary (At Time of Issue)", "Helvetica-Bold", 12)
 
     v = affidavit["verification"]
-    draw_line(f"Hash Function: {v['hash_function']}")
-    draw_line(f"Result: {'VALID' if v['valid'] else 'INVALID'}")
 
-    # ---------------- E. AFFIRMATION ----------------
-    y -= 6 * mm
+    draw_line("Verification Status: PASSED" if v["valid"] else "Verification Status: FAILED")
+    draw_line(f"Hash Function Used: {v['hash_function']}")
 
-    ensure_space(8)
+    y = draw_paragraph(
+        c,
+        (
+            "All cryptographic checks were successfully verified at the time "
+            "this affidavit was generated. Independent re-verification can be "
+            "performed using the Merkle proof, anchored root, transaction hash, "
+            "and digital signature provided in this document."
+        ),
+        25 * mm,
+        y,
+        160 * mm,
+        font="Helvetica",
+        font_size=10,
+        leading=14,
+    )
 
-    draw_line("E. Affirmation", "Helvetica-Bold", 12)
+    # ---------------- G. AFFIRMATION ----------------
+    draw_line("G. Affirmation", "Helvetica-Bold", 12)
 
     y = draw_paragraph(
         c,
@@ -156,15 +203,11 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
         leading=14,
     )
 
-    # ---------------- SIGNATURE ----------------
-    y -= 4 * mm
-    ensure_space(4)
-    
-    c.setFont("Helvetica",10)
+    # ---------------- H. SIGNATURE ----------------
+    y -= 6 * mm
+    draw_line("H. Registrar Signature", "Helvetica-Bold", 12)
 
-    c.drawString(25 * mm, y, "Registrar Signature:")
     signature_path = Path("assets/signature.jpeg")
-
     if signature_path.exists():
         c.drawImage(
             str(signature_path),
@@ -175,13 +218,13 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
             mask="auto",
         )
 
-    y -= 12 * mm
+    y -= 14 * mm
     draw_line(f"Date: {datetime.now().strftime('%d-%m-%Y')}")
     draw_line(f"Time: {datetime.now().strftime('%I:%M:%S %p')}")
 
-    # ---------------- F. CRYPTO ----------------
+    # ---------------- I. CRYPTOGRAPHIC ATTESTATION ----------------
     y -= 6 * mm
-    draw_line("F. Cryptographic Attestation", "Helvetica-Bold", 12)
+    draw_line("I. Cryptographic Attestation", "Helvetica-Bold", 12)
 
     draw_line("Affidavit Hash (keccak256):")
     draw_line(affidavit["affidavit_hash"])
@@ -190,12 +233,11 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
     draw_line(affidavit["signature"]["signer"])
 
     draw_line("Digital Signature:")
-    ensure_space(6)
     y = draw_paragraph(
         c,
         affidavit["signature"]["signature"],
         25 * mm,
-        y + 10,
+        y,
         160 * mm,
         font="Helvetica",
         font_size=7,
@@ -204,13 +246,10 @@ def render_affidavit_pdf(affidavit: dict, output_path: str):
 
     draw_line("Signature Algorithm: secp256k1 (Ethereum ECDSA)")
 
-    # ---------------- QR ----------------
+    # ---------------- J. QR ----------------
     ensure_space(8)
     qr_payload = build_affidavit_qr_payload(affidavit)
     draw_qr_code(c, qr_payload, 150, 25, 35)
 
     c.setFont("Helvetica", 8)
     c.drawString(150 * mm, 22 * mm, "Offline-verifiable affidavit QR")
-
-    c.showPage()
-    c.save()

@@ -36,6 +36,11 @@
 - **qrcode**: QR code generation for verification
 - **Pillow**: Image processing for document rendering
 
+### Geospatial & Geometry Processing
+- **shapely**: Geometric operations and spatial analysis
+- **geojson**: GeoJSON format handling
+- **pyproj**: Coordinate system transformations
+
 ## Frontend Technologies (Future Phases)
 - **React**: UI framework
 - **TypeScript**: Type-safe JavaScript

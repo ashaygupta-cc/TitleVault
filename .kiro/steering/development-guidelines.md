@@ -50,6 +50,13 @@
 - Inclusion proof generation for individual records
 - Court-grade affidavit generation with cryptographic backing
 
+### Public Transparency & Institutional Readiness
+- Public record inspection and transparency APIs
+- Canonical geometry exposure and spatial computation
+- Registry history and lineage inspection capabilities
+- Institutional-grade audit transparency and compliance
+- Separation of concerns for affidavit generation and verification
+
 ## Testing Strategy
 - Unit tests for individual components
 - Integration tests for API endpoints

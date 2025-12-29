@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Boolean
 from geoalchemy2 import Geometry
 import uuid
 from datetime import datetime
@@ -99,6 +99,7 @@ class PropertyRecord(Base):
 
     # Optional explicit canonical hash (future-proofing)
     canonical_hash = Column(LargeBinary, nullable=True)
+    subdivision_locked = Column(Boolean, server_default="false")
 
     # LEGACY | CANONICAL
     format = Column(
@@ -156,3 +157,13 @@ class MerkleSnapshot(Base):
         server_default=func.now(),
         nullable=False,
     )
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    action = Column(String)
+    record_hash = Column(LargeBinary)
+    metadata = Column(JSONB)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())

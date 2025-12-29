@@ -79,6 +79,19 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: This phase establishes cryptographic proof infrastructure for legal and audit compliance.
 
+### Phase 7: Registry Transparency, Public Verifiability & Institutional Readiness
+- Public record inspection APIs
+- Canonical geometry exposure & bounding box computation
+- Subdivision transparency & child aggregation
+- Registry history & lineage inspection
+- Affidavit generation & legal-grade PDF rendering
+- QR-based offline verification payloads
+- Merkle proof & anchoring verification endpoints
+- Separation of affidavit routes & schemas
+- Institutional-readiness & audit transparency hardening
+
+**Status**: This phase establishes complete public transparency and institutional-grade verification capabilities.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry
