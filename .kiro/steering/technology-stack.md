@@ -72,6 +72,30 @@
 - **flask-limiter**: Rate limiting for public endpoints
 - **elasticsearch**: Advanced search and discovery capabilities (future)
 
+### Archival & Long-Term Preservation
+- **lz4**: High-performance compression for archival packages
+- **zstandard**: Advanced compression with excellent ratio and speed
+- **cryptography**: Advanced cryptographic operations for archival integrity
+- **msgpack**: Efficient binary serialization for archival data
+- **sqlite3**: Embedded database for self-contained archival packages
+- **py7zr**: 7-Zip archive creation for comprehensive packaging
+- **checksumdir**: Directory-level integrity verification
+- **jsonschema**: Schema validation for cross-version compatibility
+
+### Offline Verification & Self-Contained Tools
+- **pyinstaller**: Standalone executable generation for verification tools
+- **cx_Freeze**: Cross-platform executable packaging
+- **nuitka**: Python compiler for performance-optimized verification tools
+- **embedded-python**: Minimal Python runtime for archival packages
+- **portable-python**: Self-contained Python environment packaging
+
+### Institutional Compliance & Audit
+- **audit-log**: Comprehensive audit trail generation and management
+- **compliance-checker**: Automated compliance validation tools
+- **digital-signature**: Advanced digital signature capabilities
+- **timestamp-authority**: Trusted timestamping for legal compliance
+- **chain-of-custody**: Cryptographic chain of custody maintenance
+
 ## Frontend Technologies (Future Phases)
 - **React**: UI framework
 - **TypeScript**: Type-safe JavaScript
@@ -117,3 +141,13 @@
 - **Kubernetes**: Container orchestration
 - **NGINX**: Reverse proxy and load balancing
 - **Let's Encrypt**: SSL certificates
+
+## Archival Infrastructure
+- **IPFS Cluster**: Distributed archival storage
+- **Arweave**: Permanent data storage blockchain
+- **Filecoin**: Decentralized storage network
+- **AWS Glacier**: Long-term cold storage
+- **Google Cloud Archive**: Enterprise archival storage
+- **Tape Storage Systems**: Ultra-long-term physical archival
+- **Hardware Security Modules (HSM)**: Cryptographic key protection
+- **Air-Gapped Systems**: Maximum security archival environments

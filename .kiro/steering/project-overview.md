@@ -160,6 +160,15 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: This phase establishes comprehensive court evidence packaging with judicial verification capabilities.
 
+### Phase 15: Archival, Offline Evidence & Institutional Freeze
+- Final canonical agreement and flat Merkle structures
+- Registry Merkle schemas for long-term verification
+- Offline-verifiable data structures
+- Institutional freeze-ready state
+- End-of-system archival guarantees
+
+**Status**: This phase completes the system with comprehensive archival capabilities and institutional freeze readiness.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry

@@ -113,14 +113,32 @@
 - Unified inspection interface for all property hierarchy levels
 - Public transparency while maintaining privacy and security boundaries
 
+### Archival & Institutional Freeze
+- Final canonical Merkle structures for long-term data preservation
+- Registry Merkle schemas with version-controlled compatibility
+- Offline-verifiable data structures with embedded verification tools
+- Institutional freeze-ready state with comprehensive compliance documentation
+- End-of-system archival guarantees with cryptographic integrity
+- Complete system reconstruction capabilities from archival data
+- Self-contained verification packages for air-gapped environments
+- Multi-layered redundancy for maximum data preservation assurance
+
 ## Testing Strategy
 - Unit tests for individual components
 - Integration tests for API endpoints
 - Contract tests using Hardhat framework
 - End-to-end tests for complete workflows
+- Archival integrity tests for long-term data preservation
+- Offline verification tests for air-gapped scenarios
+- Reconstruction validation tests for system recovery
+- Cross-version compatibility tests for schema migration
 
 ## Security Considerations
 - Validate all inputs at API boundaries
 - Implement proper authentication and authorization
 - Secure private key management
 - Rate limiting and DOS protection
+- Cryptographic integrity protection for archival data
+- Tamper-evident archival package generation
+- Air-gapped verification capability for maximum security
+- Multi-signature requirements for institutional freeze operations
