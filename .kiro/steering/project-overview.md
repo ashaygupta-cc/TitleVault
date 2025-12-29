@@ -106,6 +106,15 @@ Title Vault is a blockchain-backed registry system for immutable record manageme
 
 **Status**: This phase completes spatial integrity enforcement and evidence finalization for production readiness.
 
+### Phase 9: Agreement System & Subject Binding Layer
+- Introduce agreements as first-class legal instruments
+- Bind agreements to registry subjects (land/building/flat)
+- Enforce agreement lifecycle (ACTIVE / COMPLETED / TERMINATED)
+- Canonical agreement hashing & Merkle anchoring
+- Agreement-specific affidavits, PDFs & QR payloads
+
+**Status**: This phase establishes comprehensive legal agreement management with blockchain-backed integrity.
+
 ## Architecture Components
 
 - **Smart Contracts**: Solidity contracts for on-chain registry

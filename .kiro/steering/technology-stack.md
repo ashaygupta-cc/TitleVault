@@ -35,6 +35,8 @@
 - **reportlab**: PDF generation for affidavits
 - **qrcode**: QR code generation for verification
 - **Pillow**: Image processing for document rendering
+- **docxtpl**: Legal document template processing
+- **jinja2**: Advanced template rendering for agreements
 
 ### Geospatial & Geometry Processing
 - **shapely**: Geometric operations and spatial analysis

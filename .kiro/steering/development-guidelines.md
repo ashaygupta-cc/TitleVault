@@ -64,6 +64,13 @@
 - Court-grade evidence completion with comprehensive audit trails
 - Production-ready verification pipeline with null-safe enforcement
 
+### Legal Agreement Management
+- First-class legal agreement instruments with blockchain backing
+- Subject binding to registry entities (land, building, flat)
+- Comprehensive agreement lifecycle management and state tracking
+- Canonical agreement hashing with Merkle tree integration
+- Agreement-specific verification and affidavit generation
+
 ## Testing Strategy
 - Unit tests for individual components
 - Integration tests for API endpoints
