@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from web3 import Web3
+import json
 
 from models import Agreement, get_db
+from deps.auth import get_current_user
+from utils.activity_logger import log_user_activity
 from web3_client import (
     get_agreement_ledger_contract,
     is_subject_locked_on_chain,
@@ -30,10 +33,20 @@ def _canonical_flat_subject(subject_id: str) -> bytes:
 def verify_agreement(
     agreement_id: str,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     agreement = db.query(Agreement).get(agreement_id)
     if not agreement:
         raise HTTPException(404, "Agreement not found")
+    
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db,
+            current_user,
+            "verified_agreement_on_chain",
+            {"agreement_id": agreement_id}
+        )
 
     is_flat = agreement.subject_type == "FLAT"
 
@@ -113,17 +126,38 @@ def agreement_history(
         .all()
     )
 
+    history_items = []
+    for a in agreements:
+        # Parse canonical_json to extract buyer/seller
+        buyer = "Unknown"
+        seller = "Unknown"
+        try:
+            if isinstance(a.canonical_json, str):
+                canonical = json.loads(a.canonical_json)
+            else:
+                canonical = a.canonical_json
+            buyer = canonical.get("buyer", "Unknown")
+            seller = canonical.get("seller", "Unknown")
+            # Shorten addresses for display
+            if buyer and len(buyer) > 16:
+                buyer = f"{buyer[:10]}...{buyer[-6:]}"
+            if seller and len(seller) > 16:
+                seller = f"{seller[:10]}...{seller[-6:]}"
+        except Exception as e:
+            print(f"Failed to parse canonical_json: {e}")
+        
+        history_items.append({
+            "agreement_id": str(a.id),
+            "status": a.status.value,
+            "agreement_hash": "0x" + a.agreement_hash.hex(),
+            "tx_hash": a.tx_hash,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "buyer_address": buyer,
+            "seller_address": seller,
+        })
+
     return {
         "subject_id": subject_id,
         "count": len(agreements),
-        "history": [
-            {
-                "agreement_id": str(a.id),
-                "status": a.status.value,
-                "agreement_hash": "0x" + a.agreement_hash.hex(),
-                "tx_hash": a.tx_hash,
-                "created_at": a.created_at.isoformat() if a.created_at else None,
-            }
-            for a in agreements
-        ],
+        "history": history_items,
     }

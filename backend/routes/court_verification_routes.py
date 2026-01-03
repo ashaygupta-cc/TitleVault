@@ -5,18 +5,29 @@ from sqlalchemy.orm import Session
 
 from models import PropertyRecord, Agreement, get_db
 from web3_client import is_subject_locked_on_chain
+from deps.auth import get_current_user
+from utils.activity_logger import log_user_activity
 
 router = APIRouter(tags=["Court Verification"])
 
 
 @router.get("/parcel/{record_hash}")
-def court_verify_parcel(record_hash: str, db: Session = Depends(get_db)):
+def court_verify_parcel(record_hash: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     record = db.query(PropertyRecord).filter(
         PropertyRecord.record_hash == bytes.fromhex(record_hash[2:])
     ).first()
 
     if not record:
         raise HTTPException(404, "Parcel not found")
+    
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db,
+            current_user,
+            "verified_parcel_court",
+            {"record_hash": record_hash}
+        )
 
     locked = is_subject_locked_on_chain(record_hash, False)
 
@@ -33,10 +44,19 @@ def court_verify_parcel(record_hash: str, db: Session = Depends(get_db)):
 
 
 @router.get("/agreement/{agreement_id}")
-def court_verify_agreement(agreement_id: str, db: Session = Depends(get_db)):
+def court_verify_agreement(agreement_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     agreement = db.query(Agreement).get(agreement_id)
     if not agreement:
         raise HTTPException(404, "Agreement not found")
+    
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db,
+            current_user,
+            "verified_agreement_court",
+            {"agreement_id": agreement_id}
+        )
 
     locked = is_subject_locked_on_chain(
         agreement.subject_id,

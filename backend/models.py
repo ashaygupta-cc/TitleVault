@@ -110,7 +110,12 @@ class PropertyRecord(Base):
 
     cid = Column(Text, nullable=False)
     owner_address = Column(String, nullable=True)
+
     parent_record = Column(LargeBinary(32), nullable=True)
+
+    # DB-only fields (not on-chain)
+    survey_number = Column(String, nullable=True)
+    owner_name = Column(String, nullable=True)
 
     canonical_json = Column(JSONB, nullable=False)
 
@@ -173,6 +178,12 @@ class AuditLog(Base):
         UUID(as_uuid=True),
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
+    )
+
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     action = Column(String, nullable=False)

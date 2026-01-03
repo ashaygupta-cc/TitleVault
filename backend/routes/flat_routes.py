@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from models import PropertyRecord, FlatUnit, get_db
+from models import PropertyRecord, FlatUnit, get_db, AuditLog
 from schemas.flat_schema import CreateFlatRequest, FlatResponse
 from canonicalize import canonicalize_to_bytes, compute_keccak256_from_bytes
+from deps.auth import get_current_user
+from utils.activity_logger import log_user_activity
 
 router = APIRouter(tags=["Flat Registry"])
 
@@ -64,6 +66,8 @@ def create_flat(req: CreateFlatRequest, db: Session = Depends(get_db)):
         flat_id=str(flat.id),
         flat_hash="0x" + flat.flat_hash.hex(),
         building_id=str(flat.building_id),
+        flat_number=flat.flat_number,
+        floor_number=flat.floor_number,
         land_record_hash=land_hash,
         owner_address=flat.owner_address,
         area_m2=float(flat.area_m2),
@@ -77,7 +81,7 @@ def create_flat(req: CreateFlatRequest, db: Session = Depends(get_db)):
 # GET /flat/{flat_id}
 # --------------------------------------------------
 @router.get("/{flat_id}", response_model=FlatResponse)
-def get_flat(flat_id: str, db: Session = Depends(get_db)):
+def get_flat(flat_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
 
     flat = db.query(FlatUnit).get(flat_id)
     if not flat:
@@ -93,6 +97,8 @@ def get_flat(flat_id: str, db: Session = Depends(get_db)):
         flat_id=str(flat.id),
         flat_hash="0x" + flat.flat_hash.hex(),
         building_id=str(flat.building_id),
+        flat_number=flat.flat_number,
+        floor_number=flat.floor_number,
         land_record_hash=land_hash,
         owner_address=flat.owner_address,
         area_m2=float(flat.area_m2),

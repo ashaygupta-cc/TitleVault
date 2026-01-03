@@ -10,7 +10,9 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 from eth_keys.exceptions import BadSignature
 
-from models import get_db, PropertyRecord, MerkleSnapshot
+from models import get_db, PropertyRecord, MerkleSnapshot, AuditLog
+from deps.auth import get_current_user
+from utils.activity_logger import log_user_activity
 
 from affidavit.registry_renderer import render_registry_affidavit_pdf
 from affidavit.hash import compute_affidavit_hash
@@ -40,6 +42,7 @@ router = APIRouter(tags=["Affidavit"])
 def verify_affidavit_by_hash(
     record_hash: str = Query(...),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
     if len(clean) != 64:
@@ -48,6 +51,13 @@ def verify_affidavit_by_hash(
     record = db.query(PropertyRecord).filter(
         PropertyRecord.record_hash == bytes.fromhex(clean)
     ).first()
+
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db, current_user, "verified_registry_affidavit",
+            metadata={"record_hash": record_hash}
+        )
 
     if not record:
         return {"verified": False, "reason": "Record not found"}
@@ -248,6 +258,31 @@ def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
             "from canonical registry state and cryptographically verifies "
             "inclusion of the record in the anchored Merkle root."
         ),
+
+        # QR payload for offline verification
+        "qr_payload": {
+            "type": "REGISTRY_AFFIDAVIT_QR",
+            "schema_version": "1.0.0",
+            "system": "Blockchain Land Registry",
+            "network": "Ethereum Sepolia",
+            "chain_id": 11155111,
+            "record_hash": Web3.to_hex(record.record_hash),
+            "canonical_hash": Web3.to_hex(record.canonical_hash),
+            "owner_address": record.owner_address,
+            "cid": record.cid,
+            "parent_record": Web3.to_hex(record.parent_record) if record.parent_record else None,
+            "parcel_type": record.parcel_type,
+            "area_m2": float(record.area_m2) if record.area_m2 else None,
+            "is_subdivided": record.subdivision_locked,
+            "is_transferable": record.is_transferable,
+            "merkle_root": Web3.to_hex(snapshot.root),
+            "merkle_leaf": Web3.to_hex(leaves[index]),
+            "merkle_index": index,
+            "tx_hash": snapshot.tx_hash,
+            "block_number": snapshot.block_number,
+            "anchored_at": snapshot.anchored_at.isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
     }
 
     affidavit_hash = compute_affidavit_hash(affidavit)
@@ -262,8 +297,15 @@ def generate_affidavit(record_hash: str, db: Session = Depends(get_db)):
 # PDF
 # =========================================================
 @router.get("/{record_hash}/pdf")
-def download_affidavit_pdf(record_hash: str, db: Session = Depends(get_db)):
+def download_affidavit_pdf(record_hash: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     affidavit = generate_affidavit(record_hash, db)
+
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db, current_user, "downloaded_registry_affidavit_pdf",
+            metadata={"record_hash": record_hash}
+        )
 
     tmp_dir = Path(__file__).resolve().parent.parent / "tmp"
     tmp_dir.mkdir(exist_ok=True)

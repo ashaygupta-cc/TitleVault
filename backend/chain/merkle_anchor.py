@@ -37,7 +37,7 @@ def anchor_merkle_root(root_hex: str) -> str:
     )
 
     tx_hash = w3.eth.send_raw_transaction(
-        signed.raw_transaction
+        signed.rawTransaction
     )
 
     return w3.to_hex(tx_hash)

@@ -23,5 +23,7 @@ class Settings:
     ETH_EXPLORER_BASE = os.getenv("ETH_EXPLORER_BASE")
     AGREEMENT_LEDGER_ADDRESS = os.getenv("AGREEMENT_LEDGER_ADDRESS")
     AGREEMENT_MERKLE_ANCHOR_ADDRESS = os.getenv("AGREEMENT_MERKLE_ANCHOR_ADDRESS")
+    # Disable sending on-chain transactions during local testing (set to 'true' to disable)
+    DISABLE_ONCHAIN = os.getenv("DISABLE_ONCHAIN", "false").lower() == "true"
 
 settings = Settings()

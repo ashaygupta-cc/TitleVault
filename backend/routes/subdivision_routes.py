@@ -1,3 +1,7 @@
+def ensure_single_0x(hexstr: str) -> str:
+    while hexstr.startswith("0x"):
+        hexstr = hexstr[2:]
+    return "0x" + hexstr
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from shapely.geometry import Polygon
@@ -20,6 +24,10 @@ AREA_TOLERANCE = 0.99  # ≥99% conservation
 
 @router.post("/subdivide")
 def subdivide_record(req: SubdivideRequest, db: Session = Depends(get_db)):
+
+
+    # Debug: print the parent_record_hash value and length
+    print(f"[DEBUG] Received parent_record_hash: '{req.parent_record_hash}' (length: {len(req.parent_record_hash)})")
 
     # ✅ STRICT parse (NO padding)
     parent_hash_bytes = parse_bytes32(req.parent_record_hash)
@@ -44,10 +52,14 @@ def subdivide_record(req: SubdivideRequest, db: Session = Depends(get_db)):
 
     child_polys = [Polygon(c.polygon) for c in req.children]
 
-    validate_subdivision(
-        parent_polygon.exterior.coords,
-        [c.polygon for c in req.children]
-    )
+    try:
+        validate_subdivision(
+            parent_polygon.exterior.coords,
+            [c.polygon for c in req.children]
+        )
+    except ValueError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))
 
     union_geom = unary_union(child_polys)
     union_area = geodesic_area_m2(union_geom)
@@ -75,6 +87,7 @@ def subdivide_record(req: SubdivideRequest, db: Session = Depends(get_db)):
 
         canonical = canonicalize_to_bytes(payload)
         record_hash_hex = compute_keccak256_from_bytes(canonical)
+        record_hash_hex = ensure_single_0x(record_hash_hex)
         record_hash_bytes = parse_bytes32(record_hash_hex)
 
         cid = upload_bytes_to_ipfs(canonical)
@@ -121,6 +134,7 @@ def subdivide_record(req: SubdivideRequest, db: Session = Depends(get_db)):
 
             canonical = canonicalize_to_bytes(payload)
             residual_hash_hex = compute_keccak256_from_bytes(canonical)
+            residual_hash_hex = ensure_single_0x(residual_hash_hex)
             residual_hash_bytes = parse_bytes32(residual_hash_hex)
 
             cid = upload_bytes_to_ipfs(canonical)

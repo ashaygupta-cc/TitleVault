@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 
 from models import PropertyRecord, get_db, MerkleSnapshot
 from merkle.proof import verify_proof, verify_proof_with_trace
+from deps.auth import get_current_user
+from utils.activity_logger import log_user_activity
 from merkle.utils import (
     build_merkle_tree,
     get_merkle_root,
@@ -30,7 +32,14 @@ router = APIRouter(tags=["Registry Merkle"])
 
 
 @router.get("/root", response_model=MerkleRootResponse)
-def get_root(db: Session = Depends(get_db)):
+def get_root(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db,
+            current_user,
+            "viewed_registry_merkle_root"
+        )
 
     print("\n================ MERKLE ROOT =================")
 
@@ -70,7 +79,15 @@ def get_root(db: Session = Depends(get_db)):
 
 
 @router.get("/proof/{record_hash}", response_model=MerkleProofResponse)
-def get_proof(record_hash: str, db: Session = Depends(get_db)):
+def get_proof(record_hash: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db,
+            current_user,
+            "viewed_registry_merkle_proof",
+            {"record_hash": record_hash}
+        )
 
     print("\n================ MERKLE PROOF =================")
     print("📥 record_hash (raw):", record_hash)

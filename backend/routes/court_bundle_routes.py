@@ -1,9 +1,9 @@
 # backend/routes/court_bundle_routes.py
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-import tempfile, zipfile, json, os, hashlib
+import tempfile, zipfile, json, os, hashlib, io
 from web3 import Web3
 from datetime import datetime
 
@@ -67,6 +67,136 @@ def compute_bundle_hash(checksums: dict) -> str:
 
 
 # -------------------------------------------------
+# POST /verify-bundle (must come before /{agreement_id})
+# -------------------------------------------------
+
+@router.post("/verify-bundle")
+async def verify_court_bundle(file: UploadFile):
+    """Verify a court bundle ZIP file - extracts and validates all contents"""
+    
+    if not file.filename.lower().endswith('.zip'):
+        raise HTTPException(400, "File must be a ZIP file")
+    
+    try:
+        # Read ZIP contents
+        zip_content = await file.read()
+        zip_file = zipfile.ZipFile(io.BytesIO(zip_content))
+        
+        files_data = []
+        verified_count = 0
+        tampered_count = 0
+        error_count = 0
+        
+        for file_info in zip_file.filelist:
+            file_name = file_info.filename
+            file_type = 'other'
+            status = 'pending'
+            message = ''
+            details = {}
+            
+            try:
+                # Skip directories
+                if file_info.is_dir():
+                    continue
+                
+                # Determine file type
+                if file_name.lower().endswith('.pdf'):
+                    file_type = 'pdf'
+                elif file_name.lower().endswith('.json'):
+                    file_type = 'json'
+                elif file_name.lower().endswith('.txt'):
+                    file_type = 'txt'
+                
+                # Read file content
+                file_bytes = zip_file.read(file_name)
+                
+                # Verify based on type
+                if file_type == 'pdf':
+                    # For PDFs, check if they're valid PDFs
+                    if file_bytes.startswith(b'%PDF'):
+                        status = 'verified'
+                        message = 'Valid PDF file'
+                    else:
+                        status = 'tampered'
+                        message = 'Invalid PDF signature'
+                        tampered_count += 1
+                    verified_count += 1
+                    
+                elif file_type == 'json':
+                    # For JSON, try to parse and validate
+                    try:
+                        content = file_bytes.decode('utf-8')
+                        json_data = json.loads(content)
+                        status = 'verified'
+                        message = f'Valid JSON with {len(json_data)} top-level keys' if isinstance(json_data, dict) else 'Valid JSON'
+                        details = {
+                            'keys': list(json_data.keys())[:5] if isinstance(json_data, dict) else 'array/primitive',
+                            'size': len(content),
+                        }
+                        verified_count += 1
+                    except json.JSONDecodeError as e:
+                        status = 'tampered'
+                        message = f'Invalid JSON: {str(e)[:50]}'
+                        tampered_count += 1
+                        
+                elif file_type == 'txt':
+                    # For TXT, just check if readable
+                    try:
+                        content = file_bytes.decode('utf-8')
+                        status = 'verified'
+                        message = f'Valid text file ({len(content)} characters)'
+                        verified_count += 1
+                    except UnicodeDecodeError:
+                        status = 'error'
+                        message = 'Cannot decode as text'
+                        error_count += 1
+                        
+                else:
+                    # For other file types, just check if readable
+                    status = 'verified'
+                    message = f'File present ({len(file_bytes)} bytes)'
+                    verified_count += 1
+                    
+            except Exception as e:
+                status = 'error'
+                message = f'Verification error: {str(e)[:50]}'
+                error_count += 1
+            
+            files_data.append({
+                'name': file_name,
+                'type': file_type,
+                'status': status,
+                'message': message,
+                'details': details if details else None,
+            })
+        
+        # Determine overall status
+        if tampered_count > 0:
+            overall_status = 'tampered'
+        elif error_count > 0 and verified_count == 0:
+            overall_status = 'error'
+        elif error_count > 0:
+            overall_status = 'mixed'
+        else:
+            overall_status = 'verified'
+        
+        return {
+            'bundle_name': file.filename,
+            'total_files': len(files_data),
+            'verified_count': verified_count,
+            'tampered_count': tampered_count,
+            'error_count': error_count,
+            'overall_status': overall_status,
+            'files': files_data,
+        }
+        
+    except zipfile.BadZipFile:
+        raise HTTPException(400, "Invalid ZIP file")
+    except Exception as e:
+        raise HTTPException(500, f"Bundle verification error: {str(e)}")
+
+
+# -------------------------------------------------
 # POST /court/bundle/{agreement_id}
 # -------------------------------------------------
 
@@ -78,6 +208,22 @@ def generate_court_bundle(
     agreement = db.query(Agreement).get(agreement_id)
     if not agreement:
         raise HTTPException(404, "Agreement not found")
+    
+    # Debug: Log the agreement status
+    print(f"DEBUG: Generating court bundle for agreement {agreement_id}")
+    print(f"DEBUG: Agreement status: {agreement.status} (type: {type(agreement.status)})")
+    print(f"DEBUG: Agreement details: id={agreement.id}, status={agreement.status}")
+    
+    # Court bundle only works for ACTIVE agreements
+    # Handle both enum and string comparisons
+    status_value = agreement.status.value if hasattr(agreement.status, 'value') else str(agreement.status)
+    if status_value != "ACTIVE":
+        print(f"DEBUG: Agreement status check failed. Expected 'ACTIVE', got '{status_value}'")
+        raise HTTPException(
+            400, 
+            f"Court bundle generation requires ACTIVE agreement. Current status: {status_value}. "
+            f"For inactive agreements, download affidavit from the Agreement panel."
+        )
 
     tmp_dir = tempfile.mkdtemp(prefix="court_bundle_")
     zip_path = os.path.join(

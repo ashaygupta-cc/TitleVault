@@ -135,7 +135,20 @@ def render_registry_affidavit_pdf(affidavit: dict, output_path: str):
         y -= 6 * mm
         draw_line("C.1 GIS Area Audit", "Helvetica-Bold", 12)
         for k, v in gis.items():
-            draw_line(f"{k}: {v}")
+            if k == "children" and isinstance(v, list):
+                ensure_space(len(v) + 1)
+                draw_line("children:")
+                for child in v:
+                    child_text = (
+                        f"- record_hash: {child.get('record_hash')} | "
+                        f"area_m2: {child.get('area_m2')} | "
+                        f"parcel_type: {child.get('parcel_type')} | "
+                        f"transferable: {child.get('is_transferable')}"
+                    )
+                    # Use paragraph drawing to allow wrapping within page margins
+                    y = draw_paragraph(c, child_text, 30 * mm, y, 140 * mm, font_size=9, leading=12)
+            else:
+                draw_line(f"{k}: {v}")
 
 
     # ---------------- D. MERKLE PROOF ----------------

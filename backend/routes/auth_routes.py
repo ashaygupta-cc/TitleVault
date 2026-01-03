@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from models import User, RefreshToken, get_db
 from schemas.auth_schema import RegisterRequest, LoginRequest, TokenResponse
@@ -11,11 +13,14 @@ from deps.auth import require_admin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+limiter = Limiter(key_func=get_remote_address)
 
 
 def create_token(payload: dict, expires_minutes: int):
     payload = payload.copy()
-    payload["exp"] = datetime.utcnow() + timedelta(minutes=expires_minutes)
+    # Use timezone-aware UTC time to prevent expiration issues
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    print(f"[AUTH] Creating token with exp: {payload['exp']}, current time: {datetime.now(timezone.utc)}")
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
@@ -31,9 +36,12 @@ def register(
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="User exists")
 
+    # Bcrypt has a 72-byte limit - truncate password to ensure compatibility
+    password_truncated = req.password[:72] if len(req.password) > 72 else req.password
+    
     user = User(
         username=req.username,
-        password_hash=pwd_context.hash(req.password),
+        password_hash=pwd_context.hash(password_truncated),
         roles=["user"],
     )
 
@@ -43,13 +51,21 @@ def register(
 
 
 # --------------------------------------------------
-# LOGIN
+# LOGIN - Rate limited to 10 requests per minute
 # --------------------------------------------------
 @router.post("/login", response_model=TokenResponse)
-def login(req: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(
+    request: Request,
+    req: LoginRequest,
+    db: Session = Depends(get_db)
+):
     user = db.query(User).filter(User.username == req.username).first()
 
-    if not user or not pwd_context.verify(req.password, user.password_hash):
+    # Bcrypt has a 72-byte limit - truncate password to ensure compatibility
+    password_truncated = req.password[:72] if len(req.password) > 72 else req.password
+    
+    if not user or not pwd_context.verify(password_truncated, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     access_token = create_token(
@@ -87,10 +103,11 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 
 # --------------------------------------------------
-# REFRESH
+# REFRESH - Rate limited to 30 requests per minute
 # --------------------------------------------------
 @router.post("/refresh")
-def refresh(token: str, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+def refresh(request: Request, token: str, db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]

@@ -10,10 +10,12 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from canonicalize import canonicalize_to_bytes
-from models import Agreement, FlatUnit, get_db
+from models import Agreement, FlatUnit, get_db, AuditLog
 from affidavit.flat_affidavit_renderer import render_flat_affidavit_pdf
 from affidavit.agreement_qr_payload import build_agreement_qr_payload
 from config import settings
+from deps.auth import get_current_user
+from utils.activity_logger import log_user_activity
 
 router = APIRouter(tags=["Flat Affidavit"])
 
@@ -34,7 +36,11 @@ def _build_flat_affidavit(flat: FlatUnit, agreement: Agreement) -> dict:
             "flat_id": str(flat.id),
             "flat_number": flat.flat_number,
             "building_id": str(flat.building_id),
-            "land_record_hash": flat.land_record_hash,
+            "land_record_hash": (
+                "0x" + flat.land_record_hash.hex() 
+                if isinstance(flat.land_record_hash, (bytes, bytearray))
+                else ("0x" + flat.land_record_hash if isinstance(flat.land_record_hash, str) and not flat.land_record_hash.startswith(('0x', '\\x')) else flat.land_record_hash.replace('\\x', '0x') if isinstance(flat.land_record_hash, str) else flat.land_record_hash)
+            ),
             "owner_address": flat.owner_address,
         },
 
@@ -70,14 +76,18 @@ def _build_flat_affidavit(flat: FlatUnit, agreement: Agreement) -> dict:
     # ---------------- CANONICAL HASH ----------------
     canonical_bytes = canonicalize_to_bytes(affidavit)
     affidavit_hash_bytes = Web3.keccak(canonical_bytes)
-    affidavit_hash = "0x" + affidavit_hash_bytes.hex()
+    affidavit_hash_hex = affidavit_hash_bytes.hex()
+    affidavit_hash_hex = affidavit_hash_hex[2:] if affidavit_hash_hex.startswith('0x') else affidavit_hash_hex
+    affidavit_hash = "0x" + affidavit_hash_hex
     affidavit["affidavit_hash"] = affidavit_hash
 
     # ---------------- DIGITAL SIGNATURE (REAL) ----------------
     if not settings.REGISTRAR_PRIVATE_KEY:
         raise RuntimeError("Registrar private key not configured")
 
-    msg = encode_defunct(hexstr=affidavit_hash)
+    # Strip 0x prefix for encode_defunct
+    affidavit_hash_clean = affidavit_hash[2:] if affidavit_hash.startswith('0x') else affidavit_hash
+    msg = encode_defunct(hexstr=affidavit_hash_clean)
     signed = Account.sign_message(msg, settings.REGISTRAR_PRIVATE_KEY)
 
     affidavit["signature"] = {
@@ -95,7 +105,7 @@ def _build_flat_affidavit(flat: FlatUnit, agreement: Agreement) -> dict:
 # GET /flat/affidavit/{flat_id}
 # ==================================================
 @router.get("/{flat_id}")
-def get_flat_affidavit_json(flat_id: str, db: Session = Depends(get_db)):
+def get_flat_affidavit_json(flat_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     flat = db.query(FlatUnit).get(flat_id)
     if not flat:
         raise HTTPException(status_code=404, detail="Flat not found")
@@ -105,13 +115,13 @@ def get_flat_affidavit_json(flat_id: str, db: Session = Depends(get_db)):
         .filter(
             Agreement.subject_type == "FLAT",
             Agreement.subject_id == str(flat.id),
-            Agreement.status == "ACTIVE",
+            Agreement.status.in_(["ACTIVE", "COMPLETED"]),
         )
         .first()
     )
 
     if not agreement:
-        raise HTTPException(400, "No active agreement for flat")
+        raise HTTPException(400, "No active or completed agreement for flat")
 
     return _build_flat_affidavit(flat, agreement)
 
@@ -120,23 +130,32 @@ def get_flat_affidavit_json(flat_id: str, db: Session = Depends(get_db)):
 # GET /flat/affidavit/{flat_id}/pdf
 # ==================================================
 @router.get("/{flat_id}/pdf")
-def generate_flat_affidavit_pdf(flat_id: str, db: Session = Depends(get_db)):
+def generate_flat_affidavit_pdf(flat_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     flat = db.query(FlatUnit).get(flat_id)
     if not flat:
         raise HTTPException(404, "Flat not found")
+
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db,
+            current_user,
+            "downloaded_flat_affidavit_pdf",
+            {"flat_id": flat_id}
+        )
 
     agreement = (
         db.query(Agreement)
         .filter(
             Agreement.subject_type == "FLAT",
             Agreement.subject_id == str(flat.id),
-            Agreement.status == "ACTIVE",
+            Agreement.status.in_(["ACTIVE", "COMPLETED"]),
         )
         .first()
     )
 
     if not agreement:
-        raise HTTPException(400, "No active agreement for flat")
+        raise HTTPException(400, "No active or completed agreement for flat")
 
     affidavit = _build_flat_affidavit(flat, agreement)
 

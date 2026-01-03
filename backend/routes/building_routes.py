@@ -83,11 +83,14 @@ def get_buildings_by_land(
 
     return [
         {
-            "building_id": str(b.id),
-            "land_record_hash": land_record_hash,
-            "name": b.name,
-            "total_floors": b.total_floors,
-            "created_at": b.created_at,
+            "id": str(b.id),
+            "parcelId": land_record_hash,
+            "name": b.name or "Unknown Building",
+            "shortId": f"B-{str(b.id)[:8].upper()}",
+            "totalFloors": b.total_floors or 1,
+            "flatsPerFloor": 4,  # Default estimate
+            "constructionYear": 2020,  # Default estimate
+            "verificationStatus": "pending",  # Default status
         }
         for b in buildings
     ]

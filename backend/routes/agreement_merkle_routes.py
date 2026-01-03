@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from web3 import Web3
 
 from models import Agreement, get_db
+from deps.auth import get_current_user
+from utils.activity_logger import log_user_activity
 from merkle.utils import agreement_leaf_hash
 from merkle.tree import build_merkle_tree
 from merkle.proof import generate_proof
@@ -31,7 +33,14 @@ def _subject_to_bytes(subject_id: str, subject_type: str) -> bytes:
 # GET /agreement/merkle/root
 # =================================================
 @router.get("/root")
-def agreement_merkle_root(db: Session = Depends(get_db)):
+def agreement_merkle_root(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db,
+            current_user,
+            "viewed_agreement_merkle_root"
+        )
 
     agreements = db.query(Agreement).filter(
         Agreement.status == "ACTIVE"
@@ -62,7 +71,15 @@ def agreement_merkle_root(db: Session = Depends(get_db)):
 # GET /agreement/merkle/proof/{subject_id}
 # =================================================
 @router.get("/proof/{subject_id}")
-def agreement_merkle_proof(subject_id: str, db: Session = Depends(get_db)):
+def agreement_merkle_proof(subject_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db,
+            current_user,
+            "viewed_agreement_merkle_proof",
+            {"subject_id": subject_id}
+        )
 
     agreements = db.query(Agreement).filter(
         Agreement.status == "ACTIVE"
@@ -72,12 +89,27 @@ def agreement_merkle_proof(subject_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "No active agreements")
 
     # -------------------------------------------------
-    # Find the agreement safely (NO StopIteration)
+    # Find the agreement by subject_id OR by id (UUID)
     # -------------------------------------------------
+    agreement = None
+    
+    # Try to find by subject_id first
     agreement = next(
         (a for a in agreements if a.subject_id == subject_id),
         None
     )
+    
+    # If not found, try to find by id (agreement UUID)
+    if not agreement:
+        try:
+            from uuid import UUID
+            agreement_uuid = UUID(subject_id)
+            agreement = next(
+                (a for a in agreements if str(a.id) == subject_id),
+                None
+            )
+        except (ValueError, TypeError):
+            pass
 
     if not agreement:
         raise HTTPException(404, "Agreement not found for subject")

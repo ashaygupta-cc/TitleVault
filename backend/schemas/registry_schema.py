@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 class Polygon(BaseModel):
@@ -12,6 +12,9 @@ class CreateRecordRequest(BaseModel):
     owner_address: str
     metadata: Dict
     polygon: Polygon
+    # DB-only fields (not sent to blockchain/canonical_json)
+    survey_number: str = None
+    owner_name: str = None
 
 
 class CreateRecordResponse(BaseModel):
@@ -24,4 +27,4 @@ class CreateRecordResponse(BaseModel):
 class TransferRecordRequest(BaseModel):
     old_record_hash: str
     new_owner_address: str
-    metadata: Dict
+    metadata: Optional[Dict] = None
