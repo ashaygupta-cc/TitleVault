@@ -1,8 +1,12 @@
+# -------------------------------------------------
+# LIST AGREEMENTS RESPONSE
+# -------------------------------------------------
+
+
+from typing import Any, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
-from typing import List, Literal, Optional
 from datetime import date
 from decimal import Decimal
-
 
 AgreementType = Literal["SALE", "LEASE"]
 SubjectType = Literal["LAND", "FLAT"]
@@ -13,6 +17,21 @@ AgreementStatus = Literal[
     "DEFAULTED",
     "CANCELLED",
 ]
+
+# -------------------------------------------------
+# LIST AGREEMENTS RESPONSE
+# -------------------------------------------------
+class AgreementListItem(BaseModel):
+    agreement_id: str
+    status: AgreementStatus
+    subject_id: str
+    subject_type: SubjectType
+    agreement_hash: str
+    created_at: Any
+    division: Union[str, None] = None
+
+class AgreementListResponse(BaseModel):
+    items: List[AgreementListItem]
 
 
 # -------------------------------------------------

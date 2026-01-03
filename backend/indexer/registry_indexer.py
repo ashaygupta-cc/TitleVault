@@ -64,6 +64,11 @@ def handle_record_created(event, db: Session):
     geom_wkt = Polygon(coords).wkt
     area_m2 = compute_area_m2(coords)
 
+    # Extract metadata fields
+    metadata = data.get("metadata", {})
+    survey_number = metadata.get("surveyNo") or metadata.get("survey_no")
+    owner_name = metadata.get("ownerName") or metadata.get("owner_name")
+
     # -----------------------------
     # Persist reconstructed record
     # -----------------------------
@@ -76,6 +81,8 @@ def handle_record_created(event, db: Session):
         canonical_json=raw,
         geom=f"SRID=4326;{geom_wkt}",
         area_m2=area_m2,
+        survey_number=survey_number,
+        owner_name=owner_name,
         created_at=datetime.fromtimestamp(timestamp, tz=timezone.utc),
     ))
 
@@ -110,6 +117,7 @@ def handle_record_transferred(event, db: Session):
 
     # -----------------------------
     # Geometry + area are inherited
+    # Survey number and owner name are also inherited from old record
     # -----------------------------
     db.add(PropertyRecord(
         record_hash=new_hash,
@@ -120,6 +128,8 @@ def handle_record_transferred(event, db: Session):
         canonical_json=old.canonical_json,
         geom=old.geom,
         area_m2=old.area_m2,
+        survey_number=old.survey_number,
+        owner_name=old.owner_name,
         parent_record=old_hash,
         created_at=datetime.fromtimestamp(timestamp, tz=timezone.utc),
     ))

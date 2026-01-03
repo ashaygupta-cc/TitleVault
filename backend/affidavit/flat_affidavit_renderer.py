@@ -9,7 +9,7 @@ from affidavit.qr import draw_qr_code
 from affidavit.agreement_qr_payload import build_agreement_qr_payload
 
 PAGE_BOTTOM = 30 * mm
-
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 
 # --------------------------------------------------
 # WATERMARK
@@ -207,7 +207,7 @@ def render_flat_affidavit_pdf(affidavit: dict, output_path: str):
     c.setFont("Helvetica", 11)
     c.drawString(25 * mm, y, "Registrar Signature :")
 
-    sig_img = Path("assets/signature.jpeg")
+    sig_img = ASSETS_DIR / "signature.jpeg"
     if sig_img.exists():
         c.drawImage(
             str(sig_img),

@@ -11,7 +11,7 @@ from affidavit.qr import draw_qr_code
 from config import settings
 
 PAGE_BOTTOM = 35 * mm
-
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 
 # --------------------------------------------------
 # Helpers
@@ -247,7 +247,8 @@ def render_agreement_pdf(affidavit: dict, output_path: str):
     c.setFont("Helvetica", 11)
     c.drawString(25 * mm, y, "Registrar Signature :")
 
-    sig_path = Path("assets/signature.jpeg")
+    sig_path = ASSETS_DIR / "signature.jpeg"
+
     if sig_path.exists():
         c.drawImage(
             str(sig_path),

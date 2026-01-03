@@ -63,3 +63,7 @@ backend/tmp/*.pdf
 hardhat/cache/
 hardhat/artifacts
 
+
+# Temporary files
+backend/create_test_users.py
+backend/init_db.py

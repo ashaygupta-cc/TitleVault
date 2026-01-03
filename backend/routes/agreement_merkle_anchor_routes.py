@@ -112,7 +112,7 @@ def anchor_agreement_merkle(db: Session = Depends(get_db)):
     # -------------------------------------------------
     # SEND TX (NON-BLOCKING)
     # -------------------------------------------------
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
 
     # -------------------------------------------------
     # TRY to wait briefly (optional)

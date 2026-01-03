@@ -2,37 +2,48 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from shapely.geometry import mapping
-from shapely.wkb import loads
+from sqlalchemy import func
+import json
 
-from models import PropertyRecord, get_db, Building,FlatUnit
+from models import PropertyRecord, get_db, Building, FlatUnit
 
-
-router = APIRouter(
-    tags=["Map"]
-)
+router = APIRouter(tags=["Map"])
 
 
+# --------------------------------------------------
+# GET /map/parcel/{record_hash}
+# --------------------------------------------------
 @router.get("/parcel/{record_hash}")
 def get_parcel_geojson(record_hash: str, db: Session = Depends(get_db)):
 
     clean = record_hash[2:] if record_hash.startswith("0x") else record_hash
 
-    record = db.query(PropertyRecord).filter(
-        PropertyRecord.record_hash == bytes.fromhex(clean)
-    ).first()
+    row = (
+        db.query(
+            PropertyRecord,
+            func.ST_AsGeoJSON(PropertyRecord.geom).label("geojson")
+        )
+        .filter(PropertyRecord.record_hash == bytes.fromhex(clean))
+        .first()
+    )
 
-    if not record:
-        raise HTTPException(404, "Parcel not found")
+    if not row or not row.geojson:
+        return {
+            "type": "Feature",
+            "geometry": None,
+            "properties": {
+                "record_hash": record_hash
+            }
+        }
 
-    geom = loads(bytes(record.geom.data))
+    record, geojson = row
 
     return {
         "type": "Feature",
-        "geometry": mapping(geom),
+        "geometry": json.loads(geojson),
         "properties": {
             "record_hash": record_hash,
-            "area_m2": record.area_m2,
+            "area_m2": float(record.area_m2) if record.area_m2 else None,
             "parent_record": (
                 record.parent_record.hex()
                 if record.parent_record else None
@@ -50,7 +61,6 @@ def get_parcel_geojson(record_hash: str, db: Session = Depends(get_db)):
 # --------------------------------------------------
 # GET /map/building/{building_id}
 # --------------------------------------------------
-
 @router.get("/building/{building_id}")
 def get_building_overlay(building_id: str, db: Session = Depends(get_db)):
 
@@ -58,19 +68,21 @@ def get_building_overlay(building_id: str, db: Session = Depends(get_db)):
     if not building:
         raise HTTPException(404, "Building not found")
 
-    record = db.query(PropertyRecord).filter(
-        PropertyRecord.record_hash == building.land_record_hash
-    ).first()
+    row = (
+        db.query(
+            func.ST_AsGeoJSON(PropertyRecord.geom).label("geojson")
+        )
+        .filter(PropertyRecord.record_hash == building.land_record_hash)
+        .first()
+    )
 
-    if not record or not record.geom:
+    if not row or not row.geojson:
         raise HTTPException(404, "Land geometry not found")
-
-    geom = loads(bytes(record.geom.data))
 
     return {
         "building_id": building_id,
         "land_record_hash": "0x" + building.land_record_hash.hex(),
-        "geometry": mapping(geom),
+        "geometry": json.loads(row.geojson),
         "total_floors": building.total_floors,
         "name": building.name,
     }
@@ -79,13 +91,14 @@ def get_building_overlay(building_id: str, db: Session = Depends(get_db)):
 # --------------------------------------------------
 # GET /map/building/{building_id}/flats
 # --------------------------------------------------
-
 @router.get("/building/{building_id}/flats")
 def list_flats_for_building(building_id: str, db: Session = Depends(get_db)):
 
-    flats = db.query(FlatUnit).filter(
-        FlatUnit.building_id == building_id
-    ).all()
+    flats = (
+        db.query(FlatUnit)
+        .filter(FlatUnit.building_id == building_id)
+        .all()
+    )
 
     return {
         "building_id": building_id,
@@ -95,7 +108,7 @@ def list_flats_for_building(building_id: str, db: Session = Depends(get_db)):
                 "flat_id": str(f.id),
                 "flat_number": f.flat_number,
                 "floor_number": f.floor_number,
-                "area_m2": float(f.area_m2),
+                "area_m2": float(f.area_m2) if f.area_m2 else None,
                 "owner_address": f.owner_address,
                 "is_locked": f.is_locked,
             }
@@ -114,16 +127,27 @@ def flat_map_context(flat_id: str, db: Session = Depends(get_db)):
     if not flat:
         raise HTTPException(404, "Flat not found")
 
-    record = db.query(PropertyRecord).filter(
-        PropertyRecord.record_hash == bytes.fromhex(flat.land_record_hash[2:])
-    ).first()
+    clean = (
+        flat.land_record_hash[2:]
+        if isinstance(flat.land_record_hash, str) and flat.land_record_hash.startswith("0x")
+        else flat.land_record_hash
+    )
 
-    geom = loads(bytes(record.geom.data))
+    row = (
+        db.query(
+            func.ST_AsGeoJSON(PropertyRecord.geom).label("geojson")
+        )
+        .filter(PropertyRecord.record_hash == bytes.fromhex(clean))
+        .first()
+    )
+
+    if not row or not row.geojson:
+        raise HTTPException(404, "Land geometry not found")
 
     return {
         "flat_id": flat_id,
         "building_id": flat.building_id,
         "flat_number": flat.flat_number,
         "floor_number": flat.floor_number,
-        "land_geometry": mapping(geom),
+        "land_geometry": json.loads(row.geojson),
     }

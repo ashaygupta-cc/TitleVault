@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Court-Grade Property Registry Design System
+   All colors MUST be HSL - Muted Legal Color Palette
+*/
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 220 25% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 10%;
+
+    --primary: 220 25% 20%;
+    --primary-foreground: 210 20% 98%;
+
+    --secondary: 210 15% 93%;
+    --secondary-foreground: 220 25% 20%;
+
+    --muted: 210 15% 93%;
+    --muted-foreground: 220 10% 45%;
+
+    --accent: 210 15% 88%;
+    --accent-foreground: 220 25% 15%;
+
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 220 25% 25%;
+
+    --radius: 0.375rem;
+
+    /* Registry Status Colors - Muted Legal Palette */
+    --status-active: 215 20% 45%; /* Slate gray - Active owner */
+    --status-active-foreground: 0 0% 100%;
+    --status-agreement: 220 45% 35%; /* Navy blue - Agreement in progress */
+    --status-agreement-foreground: 0 0% 100%;
+    --status-disputed: 25 70% 45%; /* Amber/Rust - Disputed/frozen */
+    --status-disputed-foreground: 0 0% 100%;
+    --status-unregistered: 220 10% 75%; /* Light gray - No registry data */
+    --status-unregistered-foreground: 220 25% 20%;
+
+    /* Verification Status Colors */
+    --verified: 145 50% 40%;
+    --verified-foreground: 0 0% 100%;
+    --pending: 45 80% 45%;
+    --pending-foreground: 220 25% 15%;
+    --failed: 0 65% 50%;
+    --failed-foreground: 0 0% 100%;
+
+    /* Panel and Surface Colors */
+    --panel: 210 20% 97%;
+    --panel-foreground: 220 25% 15%;
+    --surface: 0 0% 100%;
+    --surface-foreground: 220 25% 10%;
+
+    /* Sidebar */
+    --sidebar-background: 220 20% 96%;
+    --sidebar-foreground: 220 15% 30%;
+    --sidebar-primary: 220 25% 20%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 210 15% 90%;
+    --sidebar-accent-foreground: 220 25% 15%;
+    --sidebar-border: 220 15% 88%;
+    --sidebar-ring: 220 25% 25%;
+  }
+
+  .dark {
+    --background: 220 25% 8%;
+    --foreground: 210 20% 95%;
+
+    --card: 220 25% 12%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 220 25% 12%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 210 20% 90%;
+    --primary-foreground: 220 25% 10%;
+
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 220 20% 18%;
+    --muted-foreground: 210 15% 60%;
+
+    --accent: 220 20% 22%;
+    --accent-foreground: 210 20% 90%;
+
+    --destructive: 0 55% 40%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 20%;
+    --input: 220 20% 20%;
+    --ring: 210 20% 70%;
+
+    /* Registry Status Colors - Dark Mode */
+    --status-active: 215 25% 55%;
+    --status-active-foreground: 220 25% 10%;
+    --status-agreement: 220 50% 50%;
+    --status-agreement-foreground: 220 25% 10%;
+    --status-disputed: 25 65% 55%;
+    --status-disputed-foreground: 220 25% 10%;
+    --status-unregistered: 220 15% 35%;
+    --status-unregistered-foreground: 210 20% 80%;
+
+    /* Verification Status Colors - Dark Mode */
+    --verified: 145 45% 50%;
+    --verified-foreground: 220 25% 10%;
+    --pending: 45 75% 55%;
+    --pending-foreground: 220 25% 10%;
+    --failed: 0 60% 55%;
+    --failed-foreground: 220 25% 10%;
+
+    /* Panel and Surface Colors - Dark Mode */
+    --panel: 220 25% 10%;
+    --panel-foreground: 210 20% 90%;
+    --surface: 220 25% 14%;
+    --surface-foreground: 210 20% 95%;
+
+    /* Sidebar - Dark Mode */
+    --sidebar-background: 220 25% 10%;
+    --sidebar-foreground: 210 15% 85%;
+    --sidebar-primary: 210 30% 60%;
+    --sidebar-primary-foreground: 220 25% 10%;
+    --sidebar-accent: 220 20% 18%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 220 20% 18%;
+    --sidebar-ring: 210 30% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+}
+
+/* Print styles for court documents */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-break {
+    page-break-before: always;
+  }
+}
+
+/* Custom scrollbar for registry panels */
+.registry-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.registry-scrollbar::-webkit-scrollbar-track {
+  @apply bg-muted rounded-full;
+}
+
+.registry-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full hover:bg-muted-foreground/50;
+}

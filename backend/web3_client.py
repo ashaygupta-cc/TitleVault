@@ -211,7 +211,7 @@ def send_create_record_tx(
     })
 
     signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
 
     print("🚀 TX sent:", w3.to_hex(tx_hash))
     print("===================================================\n")
@@ -284,7 +284,7 @@ def send_transfer_record_tx(
     })
 
     signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
 
     print("🚀 TX sent:", w3.to_hex(tx_hash))
     print("===================================================\n")
@@ -379,7 +379,7 @@ def send_subdivide_record_tx(
     })
 
     signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
 
     print("🚀 Subdivision TX:", w3.to_hex(tx_hash))
     return w3.to_hex(tx_hash)
@@ -429,7 +429,7 @@ def send_activate_land_agreement_tx(
     })
 
     signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
 
     print("🚀 Land agreement activation TX:", w3.to_hex(tx_hash))
     print("=========================================================\n")
@@ -482,7 +482,7 @@ def send_activate_flat_agreement_tx(
     })
 
     signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
 
     print("🚀 Flat agreement activation TX:", w3.to_hex(tx_hash))
     print("=========================================================\n")
@@ -535,7 +535,7 @@ def send_close_agreement_tx(subject_id: str, is_flat: bool, action: str):
     })
 
     signed = REGISTRAR_ACCOUNT.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
 
     print(f"🚀 Agreement {action.upper()} TX:", w3.to_hex(tx_hash))
     return w3.to_hex(tx_hash)

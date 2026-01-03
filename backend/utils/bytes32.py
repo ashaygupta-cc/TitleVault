@@ -10,11 +10,14 @@ def parse_bytes32(value: str) -> bytes:
     - Raises HTTP 400 (not 500)
     """
 
+    print(f"[DEBUG] parse_bytes32 input: '{value}' (len={len(value)})")
     if value.startswith("0x"):
         value = value[2:]
+    print(f"[DEBUG] parse_bytes32 after strip: '{value}' (len={len(value)})")
 
     # 64 hex chars = 32 bytes
     if len(value) != 64:
+        print("[DEBUG] parse_bytes32 length check failed")
         raise HTTPException(
             status_code=400,
             detail="Invalid record_hash: must be 32-byte hex string"
@@ -23,6 +26,7 @@ def parse_bytes32(value: str) -> bytes:
     try:
         raw = bytes.fromhex(value)
     except ValueError:
+        print("[DEBUG] parse_bytes32 non-hex error")
         raise HTTPException(
             status_code=400,
             detail="Invalid record_hash: non-hex characters"

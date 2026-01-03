@@ -21,12 +21,11 @@ class FlatResponse(BaseModel):
     flat_id: str
     flat_hash: str
     building_id: str
-
+    flat_number: str
+    floor_number: Optional[str] = None
     land_record_hash: str
     owner_address: str
     area_m2: float
-
     is_transferable: bool
     is_locked: bool
-
     created_at: Optional[datetime]

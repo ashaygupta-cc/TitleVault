@@ -10,8 +10,7 @@ class Settings:
     REGISTRAR_PRIVATE_KEY = os.getenv("REGISTRAR_PRIVATE_KEY")
     REGISTRAR_ADDRESS = os.getenv("REGISTRAR_ADDRESS")
     CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
-    IPFS_API = os.getenv("IPFS_API", "http://ipfs:5001")
-    IPFS_LOCAL_CLI = os.getenv("IPFS_LOCAL_CLI", "true").lower() == "true"
+    IPFS_PROVIDER = os.getenv("IPFS_PROVIDER", "pinata")
     SECRET_KEY = os.getenv("SECRET_KEY", "change_this_in_prod")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     GOOGLE_MAPS_KEY = os.getenv("GOOGLE_MAPS_KEY")
@@ -23,5 +22,7 @@ class Settings:
     ETH_EXPLORER_BASE = os.getenv("ETH_EXPLORER_BASE")
     AGREEMENT_LEDGER_ADDRESS = os.getenv("AGREEMENT_LEDGER_ADDRESS")
     AGREEMENT_MERKLE_ANCHOR_ADDRESS = os.getenv("AGREEMENT_MERKLE_ANCHOR_ADDRESS")
+    # Disable sending on-chain transactions during local testing (set to 'true' to disable)
+    DISABLE_ONCHAIN = os.getenv("DISABLE_ONCHAIN", "false").lower() == "true"
 
 settings = Settings()

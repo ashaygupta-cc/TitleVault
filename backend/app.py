@@ -1,7 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+import logging
+from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
 
 from routes.auth_routes import router as auth_router
+from routes.activity_routes import router as activity_router
 from routes.registry_routes import router as registry_router
 from routes.health_routes import router as health_router
 from routes.registry_merkle_routes import router as registry_merkle_router
@@ -31,11 +38,16 @@ from routes.pdf_batch_routes import router as pdf_batch_router
 from routes.flat_affidavit_routes import router as flat_affidavit_router
 from routes.flat_routes import router as flat_router
 from routes.flat_agreement_merkle_routes import router as flat_agreement_merkle_router
+from routes.pdf_verification_routes import router as pdf_verification_router
 
 from models import Base, engine
 from indexer.registry_indexer import sync_from_chain
 import asyncio
 from indexer.live_registry_listener import listen_registry_events
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 
 
 app = FastAPI(
@@ -43,18 +55,61 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Rate limiter configuration
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, lambda request, exc: JSONResponse(
+    status_code=429,
+    content={"detail": "Too many requests. Please try again later."}
+))
+
+# CORS middleware - must be added FIRST before routers
+# -----------------------------
+# CORS (ENV-DRIVEN)
+# -----------------------------
+frontend_origins = os.getenv("FRONTEND_ORIGINS", "")
+
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in frontend_origins.split(",")
+    if origin.strip()
+]
+
+# Fallback for local dev
+if not ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "http://localhost:8080",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Serve static assets (signature image, etc.) from backend/assets - AFTER CORS middleware
+app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
+# Request logging middleware for debugging
+@app.middleware("http")
+async def log_request(request: Request, call_next):
+    if request.method == "POST" and "registry/create" in request.url.path:
+        try:
+            body = await request.body()
+            logging.warning(f"📋 POST {request.url.path}: {body.decode('utf-8')[:500]}")
+        except:
+            pass
+    response = await call_next(request)
+    return response
+
 # --------------------------------------------------
 # CORE ROUTES
 # --------------------------------------------------
-app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+app.include_router(auth_router, tags=["Auth"])
+app.include_router(activity_router, tags=["Activity"])
 app.include_router(health_router, prefix="/health", tags=["System"])
 
 # --------------------------------------------------
@@ -108,6 +163,7 @@ app.include_router(flat_agreement_merkle_router, prefix="/flat/agreements/merkle
 app.include_router(court_bundle_router, prefix="/court/bundle", tags=["Court Bundle"])
 app.include_router(court_verification_router, prefix="/court", tags=["Court Verification"])
 app.include_router(pdf_batch_router, prefix="/pdf", tags=["PDF Export"])
+app.include_router(pdf_verification_router, prefix="/verify/pdf", tags=["PDF Verification"])
 
 # --------------------------------------------------
 # EXPLORER

@@ -1,36 +1,49 @@
 # backend/ipfs_client.py
+import os
 import requests
 
-IPFS_API = "http://127.0.0.1:5001/api/v0"
-IPFS_GATEWAY = "http://127.0.0.1:8080/ipfs"
+# ======================================================
+# CONFIG
+# ======================================================
+IPFS_PROVIDER = os.getenv("IPFS_PROVIDER", "pinata")
+
+PINATA_API_KEY = os.getenv("PINATA_API_KEY")
+PINATA_SECRET_KEY = os.getenv("PINATA_SECRET_KEY")
+
+PINATA_FILE_URL = "https://api.pinata.cloud/pinning/pinFileToIPFS"
+PINATA_JSON_URL = "https://api.pinata.cloud/pinning/pinJSONToIPFS"
+IPFS_GATEWAY = "https://gateway.pinata.cloud/ipfs"
 
 
 # ======================================================
-# LEGACY JSON UPLOAD (kept for backward compatibility)
+# LEGACY JSON UPLOAD (kept for compatibility)
 # ======================================================
-def upload_json_to_ipfs(canonical_json: str) -> str:
+def upload_json_to_ipfs(canonical_json: dict) -> str:
     print("\n========== IPFS JSON UPLOAD START ==========")
-    print("📄 JSON length:", len(canonical_json))
-    print("🌐 IPFS API:", IPFS_API)
+    print("📄 JSON keys:", list(canonical_json.keys()))
+    print("🌐 Provider:", IPFS_PROVIDER)
+
+    if IPFS_PROVIDER != "pinata":
+        raise RuntimeError("Unsupported IPFS provider")
 
     try:
+        headers = {
+            "pinata_api_key": PINATA_API_KEY,
+            "pinata_secret_api_key": PINATA_SECRET_KEY,
+            "Content-Type": "application/json",
+        }
+
         res = requests.post(
-            f"{IPFS_API}/add",
-            files={
-                "file": (
-                    "record.json",
-                    canonical_json.encode("utf-8"),
-                    "application/json",
-                )
-            },
-            params={"pin": "true"},
-            timeout=30,
+            PINATA_JSON_URL,
+            json=canonical_json,
+            headers=headers,
+            timeout=60,
         )
 
-        print("📡 IPFS response status:", res.status_code)
+        print("📡 Pinata response status:", res.status_code)
         res.raise_for_status()
 
-        cid = res.json()["Hash"]
+        cid = res.json()["IpfsHash"]
 
         print("✅ IPFS JSON upload successful")
         print("📦 Returned CID:", cid)
@@ -46,31 +59,38 @@ def upload_json_to_ipfs(canonical_json: str) -> str:
 
 
 # ======================================================
-# ✅ CORRECT BYTE UPLOAD (USE THIS FOR NEW RECORDS)
+# BYTE UPLOAD (PDF / BINARY)
 # ======================================================
-def upload_bytes_to_ipfs(data: bytes) -> str:
+def upload_bytes_to_ipfs(data: bytes, filename: str = "record.bin") -> str:
     print("\n========== IPFS BYTE UPLOAD START ==========")
     print("📄 Byte length:", len(data))
-    print("🌐 IPFS API:", IPFS_API)
+    print("📁 Filename:", filename)
+    print("🌐 Provider:", IPFS_PROVIDER)
+
+    if IPFS_PROVIDER != "pinata":
+        raise RuntimeError("Unsupported IPFS provider")
 
     try:
+        headers = {
+            "pinata_api_key": PINATA_API_KEY,
+            "pinata_secret_api_key": PINATA_SECRET_KEY,
+        }
+
+        files = {
+            "file": (filename, data),
+        }
+
         res = requests.post(
-            f"{IPFS_API}/add",
-            files={
-                "file": (
-                    "record.bin",
-                    data,
-                    "application/octet-stream",
-                )
-            },
-            params={"pin": "true"},
-            timeout=30,
+            PINATA_FILE_URL,
+            files=files,
+            headers=headers,
+            timeout=60,
         )
 
-        print("📡 IPFS response status:", res.status_code)
+        print("📡 Pinata response status:", res.status_code)
         res.raise_for_status()
 
-        cid = res.json()["Hash"]
+        cid = res.json()["IpfsHash"]
 
         print("✅ IPFS byte upload successful")
         print("📦 Returned CID:", cid)
@@ -86,7 +106,7 @@ def upload_bytes_to_ipfs(data: bytes) -> str:
 
 
 # ======================================================
-# FETCH (unchanged, works for both JSON & bytes)
+# FETCH (PRINTS KEPT — PINATA GATEWAY)
 # ======================================================
 def fetch_raw_from_ipfs(cid: str) -> str:
     print("\n========== IPFS FETCH START ==========")

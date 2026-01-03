@@ -10,12 +10,15 @@ from fastapi.responses import FileResponse
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
-from models import Agreement, get_db
+from models import Agreement, get_db, AuditLog
 from web3_client import w3
 from affidavit.agreement_qr_payload import build_agreement_qr_payload
 from affidavit.agreement_renderer import render_agreement_pdf
 from routes.agreement_enforcement_routes import enforce_agreement
 from canonicalize import canonicalize_to_bytes
+from schemas.affidavit_schema import VerifyAgreementAffidavitSignatureRequest
+from deps.auth import get_current_user
+from utils.activity_logger import log_user_activity
 
 from merkle.proof import verify_proof, generate_proof
 from merkle.utils import agreement_leaf_hash
@@ -95,6 +98,13 @@ def _build_agreement_affidavit(
     # --------------------------------------------------
     # AFFIDAVIT BODY
     # --------------------------------------------------
+    # Clean hash prefixes to avoid double 0x
+    agreement_hash_hex = agreement.agreement_hash.hex()
+    agreement_hash_hex = agreement_hash_hex[2:] if agreement_hash_hex.startswith('0x') else agreement_hash_hex
+    
+    root_hex = root.hex()
+    root_hex = root_hex[2:] if root_hex.startswith('0x') else root_hex
+    
     affidavit = {
         "type": "AGREEMENT_AFFIDAVIT",
         "schema_version": "1.0.0",
@@ -105,7 +115,7 @@ def _build_agreement_affidavit(
 
         "agreement": {
             "agreement_id": str(agreement.id),
-            "agreement_hash": "0x" + agreement.agreement_hash.hex(),
+            "agreement_hash": "0x" + agreement_hash_hex,
             "subject_id": agreement.subject_id,
             "subject_type": agreement.subject_type,
             "agreement_type": canonical_terms.get("agreement_type"),
@@ -116,7 +126,7 @@ def _build_agreement_affidavit(
         "anchoring": {
             "activation_tx": agreement.tx_hash,
             "activated_at": activated_at,
-            "merkle_root": "0x" + root.hex(),
+            "merkle_root": "0x" + root_hex,
             "merkle_verified": merkle_valid,
             "proof_length": len(proof),
         },
@@ -131,7 +141,9 @@ def _build_agreement_affidavit(
     # --------------------------------------------------
     canonical_bytes = canonicalize_to_bytes(affidavit)
     affidavit_hash_bytes = Web3.keccak(canonical_bytes)
-    affidavit_hash = "0x" + affidavit_hash_bytes.hex()
+    affidavit_hash_hex = affidavit_hash_bytes.hex()
+    affidavit_hash_hex = affidavit_hash_hex[2:] if affidavit_hash_hex.startswith('0x') else affidavit_hash_hex
+    affidavit_hash = "0x" + affidavit_hash_hex
     affidavit["affidavit_hash"] = affidavit_hash
 
     # --------------------------------------------------
@@ -140,7 +152,9 @@ def _build_agreement_affidavit(
     if not settings.REGISTRAR_PRIVATE_KEY:
         raise RuntimeError("Registrar private key not configured")
 
-    msg = encode_defunct(hexstr=affidavit_hash)
+    # Strip 0x prefix for encode_defunct
+    affidavit_hash_clean = affidavit_hash[2:] if affidavit_hash.startswith('0x') else affidavit_hash
+    msg = encode_defunct(hexstr=affidavit_hash_clean)
     signed = Account.sign_message(msg, settings.REGISTRAR_PRIVATE_KEY)
 
     affidavit["signature"] = {
@@ -163,6 +177,7 @@ def _build_agreement_affidavit(
 def get_agreement_affidavit(
     agreement_id: str,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     agreement = db.query(Agreement).get(agreement_id)
     if not agreement:
@@ -179,10 +194,20 @@ def get_agreement_affidavit(
 def get_agreement_affidavit_pdf(
     agreement_id: str,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     agreement = db.query(Agreement).get(agreement_id)
     if not agreement:
         raise HTTPException(404, "Agreement not found")
+
+    # Log activity
+    if current_user:
+        log_user_activity(
+            db,
+            current_user,
+            "downloaded_agreement_affidavit_pdf",
+            {"agreement_id": agreement_id}
+        )
 
     enforcement = enforce_agreement(agreement_id, db)
     affidavit = _build_agreement_affidavit(agreement, enforcement, db)
@@ -199,3 +224,55 @@ def get_agreement_affidavit_pdf(
         media_type="application/pdf",
         filename=f"agreement_affidavit_{agreement_id}.pdf"
     )
+
+# ======================================================
+# VERIFY SIGNATURE
+# ======================================================
+@router.post("/verify-signature")
+def verify_agreement_affidavit_signature(req: VerifyAgreementAffidavitSignatureRequest):
+    """
+    Verify agreement affidavit signature using ECDSA verification.
+    
+    The affidavit_hash is already a keccak256 hash, so we just wrap it 
+    in the Ethereum message format without re-hashing.
+    
+    Expected request body:
+    {
+        "affidavit_hash": "0x...",
+        "signature": "0x...",
+        "signer": "0x..."
+    }
+    """
+    try:
+        # Clean up the affidavit hash - remove double 0x prefix
+        hash_str = req.affidavit_hash
+        if hash_str.startswith('0x0x'):
+            hash_str = '0x' + hash_str[4:]
+        elif not hash_str.startswith('0x'):
+            hash_str = '0x' + hash_str
+        
+        # Extract hex part (without 0x prefix)
+        hex_part = hash_str[2:] if hash_str.startswith('0x') else hash_str
+        
+        # The affidavit_hash is already a keccak256 hash
+        # Just wrap it in the Ethereum message format (same as signing)
+        msg = encode_defunct(hexstr=hex_part)
+
+        # Recover the signer
+        recovered = Account.recover_message(
+            msg,
+            signature=req.signature,
+        )
+
+        # Compare addresses (case-insensitive)
+        is_valid = recovered.lower() == req.signer.lower()
+
+        return {
+            "valid": is_valid,
+            "recovered_signer": recovered,
+            "expected_signer": req.signer,
+        }
+    except ValueError as e:
+        raise HTTPException(400, f"Invalid signature format: {str(e)}")
+    except Exception as e:
+        raise HTTPException(400, f"Signature verification failed: {str(e)}")

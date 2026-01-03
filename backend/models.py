@@ -48,9 +48,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+    UUID(as_uuid=True),
+    primary_key=True,
+    default=uuid.uuid4
     )
 
     username = Column(String, unique=True, nullable=False)
@@ -69,7 +69,11 @@ class User(Base):
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(
+    UUID(as_uuid=True),
+    primary_key=True,
+    default=uuid.uuid4
+    )
 
     user_id = Column(
         UUID(as_uuid=True),
@@ -88,9 +92,9 @@ class PropertyRecord(Base):
     __tablename__ = "property_records"
 
     id = Column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+    UUID(as_uuid=True),
+    primary_key=True,
+    default=uuid.uuid4
     )
 
     record_hash = Column(LargeBinary(32), unique=True, nullable=False)
@@ -110,14 +114,16 @@ class PropertyRecord(Base):
 
     cid = Column(Text, nullable=False)
     owner_address = Column(String, nullable=True)
+
     parent_record = Column(LargeBinary(32), nullable=True)
+
+    # DB-only fields (not on-chain)
+    survey_number = Column(String, nullable=True)
+    owner_name = Column(String, nullable=True)
 
     canonical_json = Column(JSONB, nullable=False)
 
-    geom = Column(
-        Geometry(geometry_type="POLYGON", srid=4326),
-        nullable=True,
-    )
+    geom = Column(JSONB, nullable=True)
 
     area_m2 = Column(Numeric, nullable=True)
 
@@ -147,10 +153,10 @@ class MerkleSnapshot(Base):
     __tablename__ = "merkle_snapshots"
 
     id = Column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        server_default=text("uuid_generate_v4()"),
-    )
+    UUID(as_uuid=True),
+    primary_key=True,
+    default=uuid.uuid4
+)
 
     root = Column(LargeBinary(32), nullable=False, index=True)
     tx_hash = Column(String(66), nullable=False, unique=True)
@@ -170,9 +176,15 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(
+    UUID(as_uuid=True),
+    primary_key=True,
+    default=uuid.uuid4
+)
+
+    user_id = Column(
         UUID(as_uuid=True),
-        primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     action = Column(String, nullable=False)
